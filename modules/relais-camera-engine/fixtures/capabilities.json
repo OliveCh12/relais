@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "source": "stub",
+  "canPreview": false,
+  "canRecord": false,
+  "lenses": [
+    {
+      "id": "mock-back-wide",
+      "label": "Arrière · démo",
+      "position": "back",
+      "zoom": { "min": 1, "max": 1 },
+      "torch": false,
+      "fileQualities": [
+        {
+          "id": "1080p30-sdr",
+          "width": 1920,
+          "height": 1080,
+          "fps": 30,
+          "hdr": false,
+          "codec": "h264"
+        },
+        {
+          "id": "1080p60-sdr",
+          "width": 1920,
+          "height": 1080,
+          "fps": 60,
+          "hdr": false,
+          "codec": "h264"
+        },
+        {
+          "id": "720p30-sdr",
+          "width": 1280,
+          "height": 720,
+          "fps": 30,
+          "hdr": false,
+          "codec": "h264"
+        }
+      ]
+    },
+    {
+      "id": "mock-front",
+      "label": "Avant · démo",
+      "position": "front",
+      "zoom": { "min": 1, "max": 1 },
+      "torch": false,
+      "fileQualities": [
+        {
+          "id": "1080p30-sdr",
+          "width": 1920,
+          "height": 1080,
+          "fps": 30,
+          "hdr": false,
+          "codec": "h264"
+        }
+      ]
+    }
+  ],
+  "previewQualities": [{ "width": 1280, "height": 720, "fps": 30, "maxBitrate": 2500000 }]
+}

@@ -2,22 +2,22 @@
 
 Budgets d'acceptation, aucune mesure matérielle acquise dans la fondation.
 
-| Métrique | Budget V1 local |
-| --- | --- |
-| Pairing réussi | < 15 s depuis affichage QR jusqu'à DataChannel ouvert |
-| Premier frame Moniteur | < 2 s après connexion, à mesurer sur rendu |
-| Preview glass-to-glass p95 | < 300 ms |
-| Preview | 720p30 défaut, 1080p30 maximum |
-| Bitrate preview | ≤ 6 Mbps ; cible initiale 2,5 Mbps |
-| Fichier local | 4K30 si validé, sinon 1080p60 puis 1080p30 |
-| Frames fichier perdues | 0 hors thermal critique |
-| CPU Moniteur | Décodage matériel vérifié par profiling |
-| Chauffe Caméra | Réduire preview avant qualité fichier |
-| Batterie après 20 min | > 20 % en partant de 80 %, cible initiale peu exigeante à affiner |
+| Métrique                   | Budget V1 local                                                   |
+| -------------------------- | ----------------------------------------------------------------- |
+| Pairing réussi             | < 15 s depuis affichage QR jusqu'à DataChannel ouvert             |
+| Premier frame Moniteur     | < 2 s après connexion, à mesurer sur rendu                        |
+| Preview glass-to-glass p95 | < 300 ms                                                          |
+| Preview                    | 720p30 défaut, 1080p30 maximum                                    |
+| Bitrate preview            | ≤ 6 Mbps ; cible initiale 2,5 Mbps                                |
+| Fichier local              | 4K30 si validé, sinon 1080p60 puis 1080p30                        |
+| Frames fichier perdues     | 0 hors thermal critique                                           |
+| CPU Moniteur               | Décodage matériel vérifié par profiling                           |
+| Chauffe Caméra             | Réduire preview avant qualité fichier                             |
+| Batterie après 20 min      | > 20 % en partant de 80 %, cible initiale peu exigeante à affiner |
 
 ## Instrumentation du spike
 
-Ping/echo DataChannel avec horloge monotone du même téléphone : RTT courant. Le Moniteur lit `inbound-rtp` via getStats : fps reçu/décodé, frames décodées, débit reçu et codec quand disponibles. Les champs non fournis restent « — ». Un RTT bas ne démontre pas une faible latence vidéo. Les timestamps capture/rendu de deux appareils ne se soustraient pas sans synchronisation et estimation d'erreur.
+Ping/echo DataChannel avec horloge monotone du même téléphone : RTT courant. Le Moniteur lit `inbound-rtp` via getStats : fps reçu/décodé, frames décodées, débit reçu quand disponibles. Les champs non fournis restent « — ». Un RTT bas ne démontre pas une faible latence vidéo. Les timestamps capture/rendu de deux appareils ne se soustraient pas sans synchronisation et estimation d'erreur.
 
 Le spike demande 720p30, audio OFF, H.264 en priorité et maxBitrate 2,5 Mbps/maxFramerate 30 sur le sender lorsque supporté. La négociation effective peut différer : consigner stats et codec. Un seul RTCView, pas de filtre JS, pas de flux fichier. Ni fps ni RTT ne doivent être remplis par des valeurs arbitraires.
 

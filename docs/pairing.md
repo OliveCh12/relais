@@ -13,7 +13,7 @@ Commandes produit sur DataChannel : ID, action, ACK, état autoritaire et erreur
 Un Mac du même LAN héberge `pnpm spike:signaling`. Le terminal affiche son adresse privée et son port. Autoriser le port 8787 sur le pare-feu si nécessaire. Les deux téléphones utilisent un Dev Client compilé et ouvrent « Spike WebRTC » depuis l'accueil dev.
 
 1. Caméra : saisir l'URL HTTP privée affichée par le serveur ; lancer « Créer une session ». Autoriser caméra. Le QR apparaît après création de l'offre.
-2. Moniteur : scanner ce QR ; le scanner doit disparaître avant connexion. Le flux distant s'affiche après échange SDP/ICE ; aucun accès micro.
+2. Moniteur : scanner ce QR, puis « Rejoindre la Caméra » ; le scanner est démonté avant connexion. Le flux distant s'affiche après échange SDP/ICE ; aucun accès micro.
 3. Moniteur : envoyer `ping`, puis `rec-mock`. Le premier affiche le RTT ; le second confirme un écho sans commencer de rec.
 4. Quitter l'écran ou passer en background libère tracks, peer connection et timers. Créer un nouveau QR après expiration/déconnexion. Reconnexion automatique hors spike 0.
 
@@ -23,11 +23,11 @@ Le serveur Mac est un écart de spike explicite. Le fonctionnement autonome à d
 
 ## Trois scénarios d'acceptation
 
-| Scénario | Procédure | Attendu / état fondation |
-| --- | --- | --- |
-| iPhone Caméra → Pixel Moniteur | Box Wi-Fi, QR, preview 20 min, ping/rec-mock ; répéter hotspot | Pairing < 15 s, frame < 2 s, vidéo p95 < 300 ms ; à mesurer |
-| Pixel Caméra → iPhone Moniteur | Même séquence inverse ; permissions refusées puis accordées | Même budgets, pas d'écran bloqué ; à mesurer |
-| Wi-Fi perdu 5 s pendant rec | Après pipeline natif : lancer vrai fichier, couper Wi-Fi, rétablir, resynchroniser puis Stop | Fichier intact, preview revient, aucune commande Stop issue de la perte réseau. Invariant unitaire maintenant ; scénario matériel bloqué par stub |
+| Scénario                       | Procédure                                                                                    | Attendu / état fondation                                                                                                                          |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iPhone Caméra → Pixel Moniteur | Box Wi-Fi, QR, preview 20 min, ping/rec-mock ; répéter hotspot                               | Pairing < 15 s, frame < 2 s, vidéo p95 < 300 ms ; à mesurer                                                                                       |
+| Pixel Caméra → iPhone Moniteur | Même séquence inverse ; permissions refusées puis accordées                                  | Même budgets, pas d'écran bloqué ; à mesurer                                                                                                      |
+| Wi-Fi perdu 5 s pendant rec    | Après pipeline natif : lancer vrai fichier, couper Wi-Fi, rétablir, resynchroniser puis Stop | Fichier intact, preview revient, aucune commande Stop issue de la perte réseau. Invariant unitaire maintenant ; scénario matériel bloqué par stub |
 
 ## Device lab / testdroid-ready
 

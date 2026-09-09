@@ -1,0 +1,8 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["RelaisCameraEngineModule"],
+    "podspecPath": "ios/RelaisCameraEngine.podspec"
+  },
+  "android": { "modules": ["expo.modules.relaiscameraengine.RelaisCameraEngineModule"] }
+}

@@ -23,23 +23,23 @@ HTTP LAN + QR : SDP / ICE uniquement
 
 ## Frontières
 
-| Dossier | Responsabilité |
-| --- | --- |
-| `app/` | Routes expo-router ; aucun accès direct au capteur |
-| `src/domain/` | Types JSON, commandes ; zéro UI et zéro natif |
-| `src/session/` | Machine d'état pure et store Zustand |
-| `src/signaling/` | Descripteur QR versionné, validation LAN et client HTTP |
-| `src/transport/` | Contrat preview et DataChannel ; aucun capturer produit JS |
-| `src/camera/api.ts` | Interface publique unique du moteur et events |
-| `src/camera/native/` | Adaptateur JS vers le module Expo natif |
-| `src/camera/web/` | Stub web explicite |
-| `src/monitor/` | Commandes Moniteur ; ACK requis avant de déclarer une rec |
-| `src/capabilities/` | Validation des capacités et des combinaisons de qualité |
-| `src/design/`, `src/components/` | Tokens et composants UI minimaux |
-| `modules/relais-camera-engine/` | Binding Expo Modules, Swift, Kotlin, fixture commune |
-| `src/spikes/webrtc-preview/` | Expérience jetable getUserMedia ; jamais importée par le produit |
-| `scripts/` | Prebuild, builds, signaling LAN du spike et vérification des frontières |
-| `tests/`, `e2e/` | Invariants et protocoles device lab/testdroid |
+| Dossier                          | Responsabilité                                                          |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `app/`                           | Routes expo-router ; aucun accès direct au capteur                      |
+| `src/domain/`                    | Types JSON, commandes ; zéro UI et zéro natif                           |
+| `src/session/`                   | Machine d'état pure et store Zustand                                    |
+| `src/signaling/`                 | Descripteur QR versionné, validation LAN et client HTTP                 |
+| `src/transport/`                 | Contrat preview et DataChannel ; aucun capturer produit JS              |
+| `src/camera/api.ts`              | Interface publique unique du moteur et events                           |
+| `src/camera/native/`             | Adaptateur JS vers le module Expo natif                                 |
+| `src/camera/web/`                | Stub web explicite                                                      |
+| `src/monitor/`                   | Commandes Moniteur ; ACK requis avant de déclarer une rec               |
+| `src/capabilities/`              | Validation des capacités et des combinaisons de qualité                 |
+| `src/design/`, `src/components/` | Tokens et composants UI minimaux                                        |
+| `modules/relais-camera-engine/`  | Binding Expo Modules, Swift, Kotlin, fixture commune                    |
+| `src/spikes/webrtc-preview/`     | Expérience jetable getUserMedia ; jamais importée par le produit        |
+| `scripts/`                       | Prebuild, builds, signaling LAN du spike et vérification des frontières |
+| `tests/`, `e2e/`                 | Invariants et protocoles device lab/testdroid                           |
 
 ## Propriété du capteur
 

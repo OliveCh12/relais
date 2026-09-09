@@ -1,0 +1,7 @@
+diff --git a/lib/typescript/vendor/event-target-shim/index.d.ts b/lib/typescript/vendor/event-target-shim/index.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..a7413f846ae487e2856859003225617edd2cb8f0
+--- /dev/null
++++ b/lib/typescript/vendor/event-target-shim/index.d.ts
+@@ -0,0 +1 @@
++export * from '../../../../src/vendor/event-target-shim';
