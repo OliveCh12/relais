@@ -1,0 +1,48 @@
+# Obstacles
+
+Statuts : `open` non résolu, `spike` expérience préparée, `mitigated` mesure en place (ne signifie pas validée sur matériel). Owners = responsabilités techniques, pas personnes assignées. Priorité P0 = bloque le pipeline ; P1 = validation V1 ; P2 = option ou distribution.
+
+| ID / priorité / statut / owner | Symptôme et cause OS/API | Stratégie Relais | Succès mesurable / risque résiduel |
+| --- | --- | --- | --- |
+| O1 · P0 · open · Native camera | Capteur occupé si VisionCamera et getUserMedia ouvrent le device | Une session VisionCamera native ; outputs fichier + VideoSource. Isolation du spike imposée par lint | Un seul open device, preview+rec 20 min ; accès aux sessions v5 à prouver |
+| O2 · P0 · open · Native camera | Preview noir ou rec cassée lors du rebind CameraX | Valider la combinaison Preview/VideoCapture/Analysis ; outputs préparés. Camera2 `updateOutputConfigurations` API 37 uniquement si pertinent pour la session propriétaire | 20 démarrages/arrêts sans blackout > 300 ms ni fichier invalide ; limites surfaces OEM |
+| O3 · P2 · open · iOS camera | Multicam refusé ou coût matériel excessif | Hors V1 ; tester `isMultiCamSupported`, hardware/system pressure cost avant toute extension | Aucune UI dual sans support ; coûts dépendants des formats, aucune parité Pixel présumée |
+| O4 · P1 · open · Capabilities | Labels zoom commerciaux pris pour des optiques physiques | IDs natifs stables, label humain, plages zoom et logical cameras. 2x/8x ne sont pas automatiquement des capteurs | Matrice obtenue sur chaque device ; changements de logical camera/OEM |
+| O5 · P1 · open · iOS camera | Aspect dynamique peut modifier les dimensions pendant l'écriture | Verrouiller aspect pendant rec ; pas de rotation automatique du fichier en cours | Dimensions constantes du fichier ; comportement QuickTime à mesurer, pas présenté comme bug universel établi |
+| O6 · P0 · spike · Transport | Retour lent : capture, encode, buffers, decode, rendu | 720p30, H.264 préféré, ≤ 6 Mbps ; RTT et fps dans spike | Glass-to-glass p95 < 300 ms par film haute vitesse ; RTT seul ne mesure pas cette latence |
+| O7 · P0 · spike · Signaling | Pairing impossible sur AP isolé/hotspot | QR court et HTTP local ; ICE host only (`iceServers: []`), sans STUN public ni TURN. Serveur Mac provisoire | Pairing < 15 s, premier frame < 2 s ; hotspot et serveur Caméra restent ouverts |
+| O8 · P1 · mitigated · iOS platform | Refus LAN / HTTP / découverte | Description réseau local, ATS local ; aucun Bonjour actuellement, déclarer le service exact quand implémenté | Prompt compréhensible et échange HTTP sur device ; autorisations refusées à tester |
+| O9 · P1 · open · Android platform | Sockets LAN bloquées avec target 37 | Lire le target effectif. Déclarer et demander ACCESS_LOCAL_NETWORK seulement en ciblant 37+ ; target inférieur : INTERNET. Android 16 opt-in distinct | Test refus/révocation sur Pixel ; pas de permission nearby arbitraire |
+| O10 · P0 · mitigated · Session | Perte Wi-Fi stoppe le fichier si lifecycles couplés | Machine session conserve l'état rec ; test invariant réseau perdu. Reconnexion produit non implémentée | Fichier intact après coupure 5 s à prouver sur matériel |
+| O11 · P0 · open · Native performance | Thermal pressure et throttling | Events natifs ; réduire fps preview, résolution, overlays, puis proposer baisse fichier | Zéro drop fichier hors thermal critique ; seuils OEM à mesurer |
+| O12 · P1 · mitigated · Transport | Double encode 4K chauffe rapidement | Config preview distincte et plafonnée 1080p30 / 6 Mbps ; spike 720p30 | Dimensions réseau vérifiées par getStats ; contrainte getUserMedia peut être négociée |
+| O13 · P1 · mitigated · Monitor | Copies GPU et rendu multiples | Un RTCView par écran spike, aucun traitement frame JS | Decode HW et perfetto/Instruments ; HW non garanti par la seule lib |
+| O14 · P1 · open · Native audio | Écho/AEC empilés, audio robot | Spike audio false ; produit micro Caméra seulement, audio preview OFF. Session AVAudioSession à concevoir au moment du pipeline | Audio local intelligible sans double AEC ; Bluetooth/interruption non validés |
+| O15 · P1 · mitigated · Mobile UX | Veille écran interrompt capture | Keep awake sur écran Caméra et spike ; batterie distante prévue, jamais inventée ; luminosité manuelle au lab | 20 min premier plan ; batterie native/brightness à implémenter |
+| O16 · P2 · open · iOS storage | ProRes sature stockage ou débit | Non affiché par le stub ; support format/espace/débit à détecter. `usesProVideoStorage`/iOS 27 à confirmer avec SDK installé | Refus avant rec si insuffisant ; aucun SDK iOS installé sur machine initiale |
+| O17 · P2 · open · iOS capabilities | Options non disponibles pour activeFormat | Deferred Start support-gated ; ProRes/Log/HDR/120 fps seulement combos natifs prouvés | Revalidation à configure ; pas de promesse fondée sur nom commercial |
+| O18 · P1 · open · Android capabilities | HDR+60+stab invalides ; options Pixel stock privées | CameraX Feature Groups / Camera2 capabilities ; extensions via isExtensionSupported. RAW14/hybrid AE/temp/tint hors UI V1 | Combinaisons validées sur Pixel ; Video Boost/Looks/Magic Capture exclus |
+| O19 · P1 · open · Native timing | Stabilisation décale buffers et timestamps | Clock commune fichier/preview ; conservation timestamp capture lors de l'injection | Drift mesuré 20 min + 4K60 stab ; clocks inter-devices non synchronisées |
+| O20 · P0 · spike · RN integration | ABI/Nitro/Fabric/WebRTC incompatibles | Expo SDK stable compatible RN ; versions exactes + lock ; pas d'upgrade des trois axes simultané | TS, bundles, autolinking, Gradle et Xcode distinctement consignés ; aucun verdict natif sans build |
+| O21 · P0 · open · Native transport | Copies/coûts JS pour chaque frame | Plugin v5 natif → VideoSource WebRTC (Android capturerObserver.onFrameCaptured ; équivalent iOS). Gestion retain/release | Aucun buffer frame JS ; test ownership et backpressure avant rec réelle |
+| O22 · P1 · mitigated · Permissions | Refus caméra/micro/LAN et écran bloqué | Descriptions humaines, demande caméra au scan/spike ; micro seulement lors future rec audio, handling refus | Navigation toujours possible ; prompts iOS + Android physiques à vérifier |
+| O23 · P1 · open · Lifecycle | App background suspend caméra | V1 foreground ; arrêter spike lors background, état explicite. Pipeline produit doit gérer interruptions natives | Tests lock/home/app switch ; pas de foreground service caméra V1 |
+| O24 · P1 · open · Native orientation | Preview/fichier tournés ou miroir divergent | UI portrait 9:16 ; front miroir, back non. Métadonnées orientation à passer avec native frame injection | Mire 4 rotations/2 optiques ; spike fixe back camera |
+| O25 · P2 · open · Release | Revue stores/confidentialité | Description « retour live local » ; aucun compte, aucune empreinte ni média cloud | Checklist permissions et privacy manifest avant soumission ; stores hors scope |
+
+## Obstacles de machine et écarts contrôlés
+
+- Xcode absent : pas de SDK iOS/CocoaPods configuré. Prebuild et bundle iOS ne suffisent pas à affirmer « compile iOS ».
+- Android Studio possède un JBR ; son adéquation avec le Gradle généré doit être vérifiée. SDK initial partiel : plateforme 37 et build-tools 36 ; NDK/cmdline-tools absents.
+- RN 0.87.1 est publié au registre lors de la création, mais Expo stable 57 cible RN 0.86. Le couple supporté Expo/RN prime sur un saut RN isolé non supporté ([Expo SDK 57](https://expo.dev/changelog/sdk-57)).
+- Spike = deux téléphones + Mac LAN. La cible produit à deux téléphones sans ordinateur n'est pas livrée par ce spike.
+- HTTP de signaling non chiffré : token QR éphémère, rôles distincts, TTL, taille et nombre de sessions bornés. Un attaquant sur le LAN peut observer le signaling et ses tokens ; l'authentification forte/pinning SDP reste à concevoir avant produit.
+
+## Sources primaires consultées le 9 septembre 2026
+
+- [VisionCamera v5 installation et dépendances Nitro](https://visioncamera.margelo.com/docs) ; [plugins natifs](https://visioncamera.margelo.com/docs/native-frame-processor-plugins).
+- [WebRTC RN, Expo Dev Client et revision M124](https://github.com/react-native-webrtc/react-native-webrtc).
+- [Android 17 et réseau local](https://developer.android.com/privacy-and-security/local-network-permission) ; [surfaces Camera2 dynamiques](https://android-developers.googleblog.com/2026/02/the-first-beta-of-android-17.html).
+- [Deferred Start](https://developer.apple.com/documentation/avfoundation/avcaptureoutput/isdeferredstartenabled) ; [dynamic aspect ratio](https://developer.apple.com/documentation/avfoundation/avcapturedevice/setdynamicaspectratio(_:completionhandler:)).
+
+Les API documentées ne prouvent ni la présence sur chaque appareil cible ni une combinaison de capture fonctionnelle.
