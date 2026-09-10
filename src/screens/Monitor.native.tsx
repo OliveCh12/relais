@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +11,6 @@ import { CameraIconButton } from '@/components/CameraIconButton';
 import { CaptureModes } from '@/components/CaptureModes';
 import { DeviceDetails } from '@/components/DeviceList';
 import { MonitorSetup } from '@/components/connection/MonitorSetup';
-import { ScanSheet } from '@/components/connection/ScanSheet';
 import { ConnectionSheet } from '@/components/connection/ConnectionSheet';
 import type { ConnectionPanel } from '@/components/connection/ConnectionSheet.types';
 import { useDevices, type DeviceRow } from '@/connections/useDevices';
@@ -37,12 +36,13 @@ export default function MonitorScreen() {
     diagnostics,
   } = connection;
   const [panel, setPanel] = useState<ConnectionPanel | null>(null);
-  const [scanning, setScanning] = useState(false);
+  const scanning = panel === 'scan';
   const [scanned, setScanned] = useState<PairingDescriptor | null>(null);
   const [details, setDetails] = useState<DeviceRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fill, setFill] = useState(false);
   const autoAttempt = useRef('');
+  const autoConnect = useRef(true);
   const devices = useDevices(connection.server, focused && !active && !scanning);
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -67,7 +67,7 @@ export default function MonitorScreen() {
     void start(row.descriptor, row.device);
   };
   useEffect(() => {
-    if (active || !focused || scanning || panel || details) return;
+    if (!autoConnect.current || active || !focused || scanning || panel || details) return;
     const available = devices.rows.filter((row) => row.descriptor);
     const row = available.length === 1 ? available[0] : undefined;
     if (!row?.descriptor || autoAttempt.current === row.descriptor.sessionId) return;
@@ -109,16 +109,15 @@ export default function MonitorScreen() {
       const descriptor = parsePairingQr(value);
       setError(null);
       setPanel(null);
-      setScanning(false);
       setScanned(descriptor);
     } catch {
-      setScanning(false);
+      setPanel('code');
       setError('This code is invalid or expired. Open a new connection code on the camera phone.');
     }
   };
   const close = () => {
+    autoConnect.current = false;
     connection.stop();
-    router.back();
   };
   return (
     <View style={{ flex: 1, backgroundColor: visible ? '#000' : theme.background }}>
@@ -140,12 +139,16 @@ export default function MonitorScreen() {
               { top: insets.top + 6, left: insets.left + 12, right: insets.right + 12 },
             ]}
           >
-            <CameraIconButton icon="close" label="Close Monitor" onPress={close} />
+            <CameraIconButton icon="back" label="Back to cameras" onPress={close} />
             <View style={styles.status}>
-              <Text style={styles.title}>
-                {recording ? '● Recording' : remote?.quality || 'Connecting…'}
-              </Text>
-              <Text style={styles.caption}>{connection.device?.name ?? 'Camera'}</Text>
+              <Text style={styles.title}>{remote?.quality || 'Connecting…'}</Text>
+              <View style={styles.device}>
+                <Text style={styles.caption} numberOfLines={1} ellipsizeMode="middle">
+                  {connection.device?.name ?? 'Camera'}
+                </Text>
+                <ConnectionQuality sample={connection.quality} compact />
+              </View>
+              {recording && <Text style={styles.recording}>Recording</Text>}
             </View>
             <CameraIconButton
               icon="info"
@@ -159,10 +162,11 @@ export default function MonitorScreen() {
               { left: insets.left + 20, right: insets.right + 20, bottom: insets.bottom + 12 },
             ]}
           >
-            <Text style={styles.message} accessibilityLiveRegion="polite">
-              {remote?.message ||
-                (connected ? 'Saved on the camera phone' : 'Connecting securely…')}
-            </Text>
+            {!!remote?.message && !recording && (
+              <Text style={styles.message} accessibilityLiveRegion="polite">
+                {remote.message}
+              </Text>
+            )}
             <View style={styles.shutter}>
               <CameraIconButton
                 large
@@ -189,13 +193,12 @@ export default function MonitorScreen() {
                 onMode={(mode) => command(`mode-${mode}`)}
               />
             )}
-            <ConnectionQuality sample={connection.quality} />
           </View>
         </>
       ) : (
         <MonitorSetup
           rows={devices.rows}
-          status={error || devices.error || status}
+          status={error || devices.error || connection.error || (active ? status : '')}
           connecting={active}
           onSelect={select}
           onDetails={setDetails}
@@ -203,13 +206,11 @@ export default function MonitorScreen() {
             autoAttempt.current = '';
             devices.refresh();
           }}
-          onScan={() => setScanning(true)}
-          onCode={() => setPanel('code')}
+          onAdd={() => setPanel('add')}
           onSettings={() => setPanel('server')}
-          onCancel={connection.stop}
+          onCancel={close}
         />
       )}
-      {scanning && <ScanSheet onScan={readCode} onClose={() => setScanning(false)} />}
       <ConnectionSheet
         panel={panel}
         qr={null}
@@ -284,7 +285,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#00000080',
   },
   title: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  caption: { color: '#DDD', fontSize: 12, textAlign: 'center' },
+  device: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
+  caption: { color: '#DDD', fontSize: 12, textAlign: 'center', flexShrink: 1 },
+  recording: { color: '#FF6961', fontSize: 12, fontWeight: '600', marginTop: 3 },
   bottom: { position: 'absolute', gap: 12 },
   shutter: { alignItems: 'center' },
   message: {

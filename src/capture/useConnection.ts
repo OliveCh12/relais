@@ -32,6 +32,7 @@ export function useConnection(
   const [active, setActive] = useState(false);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState('Open Camera on your other phone.');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [qr, setQr] = useState<PairingDescriptor | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [device, setDevice] = useState<SavedDevice | null>(null);
@@ -91,6 +92,7 @@ export function useConnection(
     setRemote(null);
     setQuality(null);
     setSending(false);
+    setConnectionError(null);
   }, []);
 
   useEffect(() => {
@@ -127,6 +129,9 @@ export function useConnection(
         if (!isCurrent()) return;
         stop();
         setStatus(reason || 'Connection lost. Open Camera on your other phone to reconnect.');
+        setConnectionError(
+          reason || 'Connection lost. Open Camera on your other phone to reconnect.',
+        );
         retryAt.current = Date.now() + 3000;
         retryTimer.current = setTimeout(() => setRetry((value) => value + 1), 3000);
       };
@@ -201,6 +206,9 @@ export function useConnection(
         if (!isCurrent()) return;
         close();
         setStatus(error instanceof Error ? error.message : 'Could not connect. Try again.');
+        setConnectionError(
+          error instanceof Error ? error.message : 'Could not connect. Try again.',
+        );
       }
     },
     [publish, role, server, stop],
@@ -271,6 +279,7 @@ export function useConnection(
 
   return {
     diagnostics,
+    error: connectionError,
     server,
     setServer,
     status,

@@ -1,4 +1,4 @@
-export type ConnectionPanel = 'qr' | 'options' | 'code' | 'server';
+export type ConnectionPanel = 'qr' | 'options' | 'code' | 'server' | 'add' | 'scan';
 
 export interface ConnectionSheetProps {
   panel: ConnectionPanel | null;
@@ -23,10 +23,12 @@ export const connectionTitles: Record<ConnectionPanel, string> = {
   options: 'Connection',
   code: 'Join with a code',
   server: 'Mac connection',
+  add: 'Add camera',
+  scan: 'Scan code',
 };
 
 export const qrInstructions =
-  'On the other phone, open Monitor, then Scan a QR code. The connection will be saved for next time.';
+  'On the other phone, open Monitor, tap +, then Scan code. The connection will be saved for next time.';
 export const previewExplanation =
   'Photos and videos are saved on the camera phone. You can capture from either phone.';
 export const serverExplanation =

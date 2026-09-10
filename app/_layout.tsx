@@ -50,7 +50,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="pairing" options={{ title: 'Pair phones' }} />
         <Stack.Screen name="camera" options={{ title: 'Camera', ...captureOptions }} />
-        <Stack.Screen name="monitor" options={{ title: 'Monitor', ...captureOptions }} />
+        <Stack.Screen name="monitor" options={{ title: 'Monitor' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
         <Stack.Screen name="dev/webrtc" options={{ title: 'Live preview', headerShown: false }} />
       </Stack>

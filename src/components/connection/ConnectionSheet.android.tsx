@@ -4,6 +4,7 @@ import {
   Column,
   Host,
   ModalBottomSheet,
+  ListItem,
   OutlinedTextField,
   RNHostView,
   Row,
@@ -15,11 +16,14 @@ import {
 } from '@expo/ui/jetpack-compose';
 import {
   fillMaxWidth,
+  clickable,
   paddingAll,
   verticalScroll,
   weight,
 } from '@expo/ui/jetpack-compose/modifiers';
 import { PairingCodeImage } from './PairingCodeImage';
+import { QrScanner } from '../QrScanner';
+import { NativeIcon } from '../icons/Icon.android';
 import {
   connectionTitles,
   previewExplanation,
@@ -44,6 +48,46 @@ export function ConnectionSheet(props: ConnectionSheetProps) {
           verticalArrangement={{ spacedBy: 20 }}
         >
           <Text style={{ typography: 'titleLarge' }}>{connectionTitles[props.panel]}</Text>
+          {props.panel === 'add' && (
+            <>
+              <Text color={colors.onSurfaceVariant}>
+                Open Camera on your other phone. Keep both phones on the same Wi-Fi network.
+              </Text>
+              <ListItem
+                colors={{ containerColor: 'transparent' }}
+                modifiers={[clickable(() => props.onPanel('scan'))]}
+              >
+                <ListItem.LeadingContent>
+                  <NativeIcon name="qr" color={colors.primary} />
+                </ListItem.LeadingContent>
+                <ListItem.HeadlineContent>
+                  <Text>Scan code</Text>
+                </ListItem.HeadlineContent>
+              </ListItem>
+              <ListItem
+                colors={{ containerColor: 'transparent' }}
+                modifiers={[clickable(() => props.onPanel('code'))]}
+              >
+                <ListItem.LeadingContent>
+                  <NativeIcon name="code" color={colors.primary} />
+                </ListItem.LeadingContent>
+                <ListItem.HeadlineContent>
+                  <Text>Enter code</Text>
+                </ListItem.HeadlineContent>
+              </ListItem>
+            </>
+          )}
+          {props.panel === 'scan' && (
+            <>
+              <Text>On the other phone, open Camera and show its connection code.</Text>
+              <RNHostView matchContents>
+                <QrScanner onScan={props.onCode} />
+              </RNHostView>
+              <TextButton onClick={() => props.onPanel('code')}>
+                <Text>Enter code instead</Text>
+              </TextButton>
+            </>
+          )}
           {props.panel === 'qr' && props.qr && (
             <>
               <Text>{qrInstructions}</Text>

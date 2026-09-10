@@ -7,6 +7,7 @@ export function NativeIcon({ name, size = 24, color, label }: IconProps) {
     <Image
       systemName={sfSymbols[name]}
       size={size}
+      {...(name.startsWith('link') ? { variableValue: Number(name.slice(-1)) / 3 } : {})}
       {...(color ? { color } : {})}
       modifiers={[label ? accessibilityLabel(label) : accessibilityHidden()]}
     />

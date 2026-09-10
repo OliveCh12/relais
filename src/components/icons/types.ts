@@ -11,7 +11,18 @@ export type IconName =
   | 'torch'
   | 'torchOff'
   | 'close'
-  | 'gallery';
+  | 'gallery'
+  | 'add'
+  | 'more'
+  | 'code'
+  | 'back'
+  | 'device'
+  | 'shutter'
+  | 'stopSolid'
+  | 'link0'
+  | 'link1'
+  | 'link2'
+  | 'link3';
 
 export interface IconProps {
   name: IconName;
@@ -34,4 +45,15 @@ export const sfSymbols = {
   torchOff: 'bolt.slash',
   close: 'xmark',
   gallery: 'photo.on.rectangle',
+  add: 'plus',
+  more: 'ellipsis',
+  code: 'doc.on.clipboard',
+  back: 'chevron.left',
+  device: 'smartphone',
+  shutter: 'circle.fill',
+  stopSolid: 'stop.fill',
+  link0: 'wifi',
+  link1: 'wifi',
+  link2: 'wifi',
+  link3: 'wifi',
 } as const;

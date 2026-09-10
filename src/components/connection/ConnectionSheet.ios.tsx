@@ -31,6 +31,7 @@ import {
   textInputAutocapitalization,
 } from '@expo/ui/swift-ui/modifiers';
 import { PairingCodeImage } from './PairingCodeImage';
+import { QrScanner } from '../QrScanner';
 import {
   connectionTitles,
   previewExplanation,
@@ -58,7 +59,9 @@ export function ConnectionSheet(props: ConnectionSheetProps) {
       >
         <Group
           modifiers={[
-            presentationDetents(panel === 'qr' ? ['large'] : ['medium', 'large']),
+            presentationDetents(
+              panel === 'qr' || panel === 'scan' ? ['large'] : ['medium', 'large'],
+            ),
             presentationDragIndicator('visible'),
           ]}
         >
@@ -75,7 +78,17 @@ export function ConnectionSheet(props: ConnectionSheetProps) {
               <Spacer />
               <Button label="Done" onPress={props.onClose} />
             </HStack>
-            {panel === 'qr' && props.qr ? (
+            {panel === 'scan' ? (
+              <VStack spacing={20} modifiers={[padding({ all: 24 })]}>
+                <Text>On the other phone, open Camera and show its connection code.</Text>
+                {props.panel === 'scan' && (
+                  <RNHostView matchContents>
+                    <QrScanner onScan={props.onCode} />
+                  </RNHostView>
+                )}
+                <Button label="Enter code instead" onPress={() => props.onPanel('code')} />
+              </VStack>
+            ) : panel === 'qr' && props.qr ? (
               <ScrollView>
                 <VStack spacing={24} modifiers={[padding({ all: 24 })]}>
                   <Text>{qrInstructions}</Text>
@@ -101,6 +114,26 @@ export function ConnectionSheet(props: ConnectionSheetProps) {
               </ScrollView>
             ) : (
               <Form>
+                {panel === 'add' && (
+                  <Section
+                    footer={
+                      <Text>
+                        Open Camera on your other phone. Keep both phones on the same Wi-Fi network.
+                      </Text>
+                    }
+                  >
+                    <Button
+                      label="Scan code"
+                      systemImage="qrcode.viewfinder"
+                      onPress={() => props.onPanel('scan')}
+                    />
+                    <Button
+                      label="Enter code"
+                      systemImage="doc.on.clipboard"
+                      onPress={() => props.onPanel('code')}
+                    />
+                  </Section>
+                )}
                 {panel === 'options' && (
                   <>
                     {props.active ? (

@@ -11,7 +11,7 @@ This is a development prototype. **Photo capture, native video recording and rem
 - **Monitor:** full-width native live preview, remote photo shutter and video start/stop, Camera state, remembered devices and measured connection quality.
 - **Native interaction:** SwiftUI navigation, Forms, segmented pickers, SF Symbols and sheets on iOS; Material lists, segmented controls, sheets and symbols on Android. Web retains separate scaffolds.
 
-Open **Camera** on one phone and **Monitor** on the other. For a first connection, tap Camera's code button and scan or paste the code in Monitor. Both apps must stay open on the same Wi-Fi network. A single available saved camera reconnects automatically; choose from the list when several are available.
+Open **Camera** on one phone and **Monitor** on the other. For a first connection, tap Camera's code button, then **+ → Scan code** (or **Enter code**) in Monitor. Monitor lists remembered cameras; the information button opens device details. Both apps must stay open on the same Wi-Fi network. A single available saved camera reconnects automatically. Returning from the preview keeps the list open until you choose a camera.
 
 Choose **Photo** or **Video**, then use the shutter on either phone. Monitor waits for Camera state before displaying recording. Captures are reported saved only after gallery confirmation. Failed imports retain the private original for retry. Closing Monitor or losing Wi-Fi does not stop a local recording.
 

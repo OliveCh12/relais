@@ -12,6 +12,17 @@ import torch from '@expo/material-symbols/flash_on.xml';
 import torchOff from '@expo/material-symbols/flash_off.xml';
 import close from '@expo/material-symbols/close.xml';
 import gallery from '@expo/material-symbols/photo_library.xml';
+import add from '@expo/material-symbols/add.xml';
+import more from '@expo/material-symbols/more_vert.xml';
+import code from '@expo/material-symbols/content_paste.xml';
+import back from '@expo/material-symbols/arrow_back.xml';
+import device from '@expo/material-symbols/mobile.xml';
+import shutter from '../../../assets/icons/circle_fill.xml';
+import stopSolid from '../../../assets/icons/stop_fill.xml';
+import link0 from '@expo/material-symbols/signal_cellular_0_bar.xml';
+import link1 from '@expo/material-symbols/signal_cellular_1_bar.xml';
+import link2 from '@expo/material-symbols/signal_cellular_2_bar.xml';
+import link3 from '@expo/material-symbols/signal_cellular_4_bar.xml';
 import type { IconProps } from './types';
 
 const icons = {
@@ -28,6 +39,17 @@ const icons = {
   torchOff,
   close,
   gallery,
+  add,
+  more,
+  code,
+  back,
+  device,
+  shutter,
+  stopSolid,
+  link0,
+  link1,
+  link2,
+  link3,
 };
 
 export function NativeIcon({ name, size = 24, color, label }: IconProps) {

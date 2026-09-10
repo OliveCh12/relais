@@ -4,6 +4,17 @@
 
 ## Photo and remote capture integration
 
+### Native device-list refinement
+
+- Monitor now starts with a SwiftUI grouped List on iOS or Material LazyColumn/ListItem rows on Android. A native toolbar + on iOS and floating + on Android open a separate Add camera sheet. Refresh and connection settings live in the native overflow menu.
+- The connected preview places the remote device name and measured link indicator together below its effective quality. Back returns to the camera list and suppresses immediate automatic reconnection. Connection failures remain visible; the local recording lifecycle is unchanged.
+- Android's shutter uses a native OutlinedIconButton with Google's filled circle/stop symbols. Its circular shape explicitly supplies a radius because the installed native binding defaults to zero. The iOS QR scanner unmounts when its sheet closes, including during dismissal animation.
+- Targeted screenshots confirmed the physical Pixel list, add sheet and filled shutter, plus the iOS Simulator grouped list and connected preview from the Pixel. The owner separately reported successful use between the two physical phones. No new photo or recording was triggered in this UI pass; sustained capture and O20 remain owner checks.
+- Incremental iPhone and Android builds passed; both physical phones received the binaries and Relais was opened. The final interface is delivered by Metro, as this pass changes no native module or dependency. [Decisions and sources](docs/research/native-device-list.md).
+- Final `pnpm check` passed (30 tests, TypeScript, ESLint, boundaries and formatting), as did production exports for iOS, Android and web. The iPhone app passed strict signature verification.
+
+### Earlier capture integration validation
+
 - Replaced the Monitor's development-spike route with product controls, native connection sheets and saved-camera discovery. A single available saved camera reconnects automatically. First pairing still uses the secure-store handshake and a QR/pasted code.
 - Added native photo output and PhotoKit/MediaStore import, Photo/Video selectors and authoritative remote state. Cinematic remains an iOS hardware-dependent mode. Removed manual focus, exposure and depth controls. Home and unavailable-camera states use clearer native navigation and smaller standard controls.
 - iOS streams from the same AVFoundation session. Android extends the existing CameraX owner with a native ImageAnalysis output. Frames stay native. Closing Monitor or releasing the peer track does not stop local recording.
