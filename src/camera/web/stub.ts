@@ -2,7 +2,7 @@ import { mockCapabilities } from '../../capabilities/mock';
 import type { RelaisCameraEngine } from '../api';
 
 async function unavailable(): Promise<never> {
-  throw new Error('ERR_CAMERA_ENGINE_STUB : le pipeline caméra natif n’est pas implémenté.');
+  throw new Error('ERR_CAMERA_ENGINE_STUB : the native camera pipeline is not implemented.');
 }
 
 export const webCameraEngine: RelaisCameraEngine = {

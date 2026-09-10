@@ -4,8 +4,11 @@ import {
   MAX_SDP_BYTES,
   SESSION_TTL_MS,
   parseDescription,
+  validId,
+  validToken,
   type SignalDescription,
 } from '../src/signaling/protocol';
+import { PRESENCE_TTL_MS } from '../src/connections/model';
 
 interface Session {
   cameraToken: string;
@@ -38,8 +41,11 @@ export function createSignalingServer({
   ttl = SESSION_TTL_MS,
 } = {}) {
   const sessions = new Map<string, Session>();
+  const presence = new Map<string, { secret: string; sessionId: string; expiresAt: number }>();
   const sweep = () => {
     for (const [id, session] of sessions) if (session.expiresAt <= now()) sessions.delete(id);
+    for (const [id, item] of presence)
+      if (item.expiresAt <= now() || !sessions.has(item.sessionId)) presence.delete(id);
   };
   const timer = setInterval(sweep, 15_000);
   timer.unref();
@@ -55,6 +61,50 @@ export function createSignalingServer({
     sweep();
     if (request.headers.origin) return send(response, 403, { error: 'native-clients-only' });
     try {
+      const presenceMatch = /^\/presence\/([a-f0-9]{32})\/([a-f0-9]{32})$/.exec(request.url ?? '');
+      if (presenceMatch) {
+        const key = `${presenceMatch[1]}/${presenceMatch[2]}`;
+        const secret = request.headers.authorization?.replace(/^Bearer /, '') ?? '';
+        if (!validToken(secret)) return send(response, 401, { error: 'unauthorized' });
+        const existing = presence.get(key);
+        if (existing && !sameToken(existing.secret, secret))
+          return send(response, 403, { error: 'unauthorized' });
+        if (request.method === 'GET') {
+          const session = existing ? sessions.get(existing.sessionId) : null;
+          return send(
+            response,
+            200,
+            session && !session.answer && session.offer
+              ? {
+                  sessionId: existing!.sessionId,
+                  token: session.monitorToken,
+                  expiresAt: session.expiresAt,
+                }
+              : null,
+          );
+        }
+        if (request.method === 'DELETE') {
+          presence.delete(key);
+          return send(response, 200, { removed: true });
+        }
+        if (request.method === 'PUT') {
+          const body = (await readBody(request)) as Record<string, unknown>;
+          if (!body || !validId(body.sessionId) || !validToken(body.cameraToken))
+            return send(response, 400, { error: 'invalid-presence' });
+          const session = sessions.get(body.sessionId);
+          if (!session || !sameToken(session.cameraToken, body.cameraToken))
+            return send(response, 403, { error: 'camera-only' });
+          if (!existing && presence.size >= maxSessions * 12)
+            return send(response, 429, { error: 'capacity' });
+          presence.set(key, {
+            secret,
+            sessionId: body.sessionId,
+            expiresAt: Math.min(now() + PRESENCE_TTL_MS, session.expiresAt),
+          });
+          return send(response, 200, { published: true });
+        }
+        return send(response, 405, { error: 'method' });
+      }
       if (request.url === '/sessions' && request.method === 'POST') {
         await readBody(request);
         if (sessions.size >= maxSessions) return send(response, 429, { error: 'capacity' });
@@ -108,6 +158,7 @@ export function createSignalingServer({
   server.on('close', () => {
     clearInterval(timer);
     sessions.clear();
+    presence.clear();
   });
   return server;
 }

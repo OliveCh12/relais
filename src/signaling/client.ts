@@ -32,7 +32,11 @@ export async function signalRequest(
       signal: controller.signal,
     });
     if (!response.ok)
-      throw new Error(`Signaling HTTP ${response.status}. Vérifiez le LAN et la session.`);
+      throw new Error(
+        response.status === 404 || response.status === 410 || response.status === 403
+          ? 'This connection code is no longer available. Create a new one on the Camera phone.'
+          : 'Could not connect. Check that the Mac and both phones are on the same Wi-Fi network.',
+      );
     return await response.json();
   } finally {
     clearTimeout(timeout);
@@ -42,7 +46,8 @@ export async function signalRequest(
 
 export async function createSession(server: string, signal: AbortSignal): Promise<CreatedSession> {
   const result = await signalRequest(server, '/sessions', 'POST', signal, undefined, {});
-  if (typeof result !== 'object' || !result) throw new Error('Réponse signaling invalide.');
+  if (typeof result !== 'object' || !result)
+    throw new Error('Could not prepare the connection. Try again.');
   const value = result as Record<string, unknown>;
   if (
     !validId(value.sessionId) ||
@@ -50,7 +55,7 @@ export async function createSession(server: string, signal: AbortSignal): Promis
     !validToken(value.monitorToken) ||
     typeof value.expiresAt !== 'number'
   )
-    throw new Error('Réponse signaling invalide.');
+    throw new Error('Could not prepare the connection. Try again.');
   return {
     sessionId: value.sessionId,
     cameraToken: value.cameraToken,
@@ -65,8 +70,9 @@ export async function pollDescription(
   token: string,
   type: SignalDescription['type'],
   signal: AbortSignal,
+  timeoutMs = 120_000,
 ): Promise<SignalDescription> {
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + timeoutMs;
   while (!signal.aborted && Date.now() < deadline) {
     const result = await signalRequest(
       server,
@@ -87,5 +93,5 @@ export async function pollDescription(
       if (signal.aborted) finish();
     });
   }
-  throw new Error(signal.aborted ? 'Session fermée.' : 'Pairing expiré. Créez un nouveau QR.');
+  throw new Error(signal.aborted ? 'Session closed.' : 'Connection timed out. Create a new code.');
 }

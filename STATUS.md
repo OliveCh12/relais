@@ -1,54 +1,101 @@
-# État de la fondation — 9 septembre 2026
+# Project status — September 10, 2026
 
-**Fondation runnable ; Android compilé et démarré. iOS généré et bundlé, compilation native encore bloquée par l'absence de Xcode/CocoaPods. Aucun enregistrement réel.**
+**Native local capture and native mobile UI are implemented. Recording and remote preview remain separate flows.** On an iPhone 17 Pro, Video and Apple's Cinematic mode both opened at 4K HDR30. The hardware catalog exposed 4K120 profiles; that recording rate has not been validated. Complete recording, audio, orientation and gallery checks remain physical-device work.
 
-## Livré
+## English publication pass
 
-- Projet Git local, documentation d'architecture écrite et commitée avant le code.
-- Les 25 obstacles priorisés avec statut, owner, stratégie, métrique et risque ; matrice de capacités non présentée comme un relevé matériel.
-- Expo SDK 57 / RN 0.86.3, TypeScript strict, pnpm workspace à une seule app, versions exactes et lockfile, JDK 17 via mise.
-- Accueil Caméra/Moniteur, pairing QR de démonstration/scanner, placeholders, Rec désactivé, feuille Réglages et écran qualité sur combinaisons mock.
-- `RelaisCameraEngine` : interface JS unique, autolinking Swift/Kotlin, fixture JSON commune. `getCapabilities()` fonctionne sur Android ; opérations capture rejetées explicitement, events déclarés sans faux événements.
-- Spike séparé : getUserMedia uniquement dans son dossier, QR, signaling LAN éphémère sur Mac, SDP/ICE host, RTCView, DataChannel ping/rec-mock, RTT et stats inbound, libération au départ/background.
-- Scripts build/prebuild/validation, protocoles device lab et dossiers d'artefacts prêts pour Testdroid/Bitbar.
+- Documentation, app-owned interface text, accessibility labels, native permission descriptions, errors and source comments are in English. User-defined device names and protocol identifiers are preserved. Historical audit screenshots retain their original labels.
+- The camera permission description is shared across native config plugins so QR scanning does not overwrite the explanation of recording and local preview.
+- Visual inspection found that the embedded iOS camera inherited light UIKit traits over its black background. Its hosting controller now explicitly uses dark appearance, keeping semantic SwiftUI text readable while Home and connection sheets follow system appearance.
+- `pnpm check` passed: strict TypeScript, ESLint, 23 tests, architecture boundaries and formatting. Local documentation links were checked. A final TypeScript/config-format check also passed after the permission consolidation.
+- Production exports for iOS, Android and web succeeded. Native release bundles contain no spike/debug-control markers or rec-mock command.
+- Final iPhone and Simulator builds succeeded. The iPhone app passed `codesign --verify --deep --strict`. The English binaries were installed in the iOS Simulator and Android emulator; English Home and the corrected native iOS camera state were inspected. The physical iPhone was not reinstalled during this pass.
+- Existing hardware limitations remain: full recording/gallery validation, simultaneous native recording plus streaming, physical Android testing and the intermittent Android startup crash below. Translation and compilation do not resolve those items.
 
-## Preuves
+## Latest native UI pass
 
-| Vérification                          | Résultat                                                                                                                                                       |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TypeScript strict + ESLint + Prettier | Passent via `pnpm check`                                                                                                                                       |
-| Tests                                 | 11/11, dont serveur HTTP réel sur loopback : auth par rôle, publication unique, expiration, payload borné                                                      |
-| Frontières architecture               | Test statique : domaine pur, aucun import spike/capturer dans le produit                                                                                       |
-| Peers pnpm                            | Aucun conflit                                                                                                                                                  |
-| Prebuild iOS + Android                | Réussi ; modules locaux détectés sur les deux plateformes                                                                                                      |
-| Metro production                      | iOS Hermes, Android Hermes, web générés ; marqueurs spike et rec-mock absents des bundles natifs release                                                       |
-| Metro dev                             | iOS et Android générés avec le spike                                                                                                                           |
-| Android natif                         | `:app:assembleDebug -PreactNativeArchitectures=arm64-v8a` : BUILD SUCCESSFUL, 600 tâches, 4 min 48 s lors de la validation                                     |
-| APK                                   | 112 MiB environ, arm64, contient libVisionCamera/libNitro/libWebRTC et `assets/capabilities.json`                                                              |
-| Runtime Android                       | Installation et lancement OK sur AVD Pixel_10, Android 16/API 36, image 36.1/arm64 ; route Réglages affiche les profils issus de Kotlin, route spike se charge |
-| Runtime web                           | Parcours Caméra et Moniteur vérifiés ; profils masqués selon l'optique, Rec désactivé, sheet navigable                                                         |
-| iOS natif                             | **Non compilé** : Xcode absent, CocoaPods absent. Autolinking et bundle JS ne remplacent pas ce build                                                          |
-| Expo Doctor                           | 19/21 contrôles passent. Réserves laissées visibles : tooling CocoaPods ; metadata WebRTC New Architecture et module local non publié                          |
-| iPhone / Pixel réels                  | Non disponibles ; pairing croisé, preview et rec matérielle non testés                                                                                         |
+- Home has two native actions: Camera and Monitor. Remembered devices are accessed through Monitor, without a duplicate entry point.
+- iPhone uses a SwiftUI segmented Video/Cinematic picker, Liquid Glass action buttons on iOS 26, and compatible system button styles on older versions.
+- Android places zoom above the shutter and splits native settings into Video and Framing with a Material segmented control.
+- QR, manual code entry and Mac connection settings use native sheets. Closing the QR retains the session and preview; Android confirmed `active=true`, `hasStream=true`, `panel=null`. The sheet closes when the link opens.
+- Connection and device sheets follow system appearance. A white-on-white iOS sheet title was found visually and corrected.
+- Signed iPhone and Simulator builds passed and were installed. Home/options were inspected on iOS; Home, QR and Video/Framing settings were inspected on Android.
+- Android ARM64 rebuilt successfully in 5 min 2 s (600 tasks) and was reinstalled. Its developer Tools button was intercepting the camera settings action; the button is hidden, with the default preserved in `plugins/with-dev-menu.cjs`.
+- The new iPhone build reported a 4K HDR30 take in progress during user testing. It was left uninterrupted; finalization and Photos import were not verified by the agent.
+- TypeScript, ESLint, formatting and architectural boundaries passed. No recording pipeline, pairing trust or dependency change was made by the UI pass.
 
-Copie locale de l'APK : `e2e/artifacts/relais-debug-arm64.apk`. Logs et captures de validation dans `e2e/artifacts/`, ignorés par Git. Les sources Swift/Kotlin et la fixture sont suivies par Git ; les sorties CNG et Gradle ne le sont pas.
+**Open Android issue (O20):** a SIGSEGV in `MountingCoordinator::pullTransaction` occurred at the first launch after installation, at 10:54:44. It did not recur during the next two cold starts or Camera → Settings → Framing. Its cause is unknown and it is not considered fixed. An earlier Dev Client relaunch had shown the same native stack. Local log: `/tmp/relais-ux-android-crash.log`.
 
-## Limites à conserver visibles
+## Native camera implementation
 
-1. Produit : aucune session caméra native réelle, injection de frames, rec, commande distante, reconnexion ou mesure thermique. Les capacités sont explicitement fictives.
-2. Spike : nécessite un Mac LAN en plus des deux téléphones ; pas encore de signaling hébergé sur la Caméra, pas de validation hotspot autonome. HTTP/token LAN n'est pas une authentification forte.
-3. Pas de promesse 4K, p95 < 300 ms, pairing < 15 s, decode matériel ou budget batterie : ce sont des critères d'acceptation documentés, pas des résultats.
-4. Compatibilité iOS, WebRTC New Architecture sur device, intégration de CameraX 1.7 alpha embarquée par VisionCamera, permissions target Android 37 et APIs iOS 27 restent à valider.
-5. L'APK est un Dev Client debug arm64, nécessite Metro pour charger le JS ; ce n'est ni un binaire Store ni un build autonome de production.
+- iOS has one direct AVFoundation session in `AppleCameraModel`, `AVCaptureMovieFileOutput`, Apple's preview/orientation handling and SwiftUI controls. It supports hardware-derived formats, frame rates, HDR, stabilization, zoom, exposure, continuous autofocus, hold-to-lock and Cinematic depth.
+- Android retains VisionCamera/CameraX. Profiles are validated with Preview and VideoCapture together; the UI exposes compatible resolution, frame rate, HDR, stabilization, exposure and zoom. The Pixel emulator opened at 720p30; this is not Android hardware-performance evidence.
+- iPhone 17 Pro on iOS 26.6.1: signed installation, native startup, capability enumeration, 4K HDR30 and Cinematic 4K HDR30 configuration succeeded. The screen stayed awake.
+- SwiftUI settings were inspected on the physical iPhone; Compose settings and preview were inspected on Android. Local screenshots are in ignored `e2e/artifacts/native-camera/`. UIKit-rendered snapshots do not faithfully capture AV preview pixels or their material composition.
+- Four focused profile/recording-coordination tests passed. Production exports were generated for iOS, Android and web; native release bundles excluded debug probes.
+- ProRes/RAW, Log, external storage and simultaneous native recording/streaming are not implemented. Cinematic capture uses Apple's public iOS 26 API, not a custom depth effect. Android photo extensions are not advertised as video modes.
 
-## Prochain spike exact : injection native
+## Remembered devices and remote preview
 
-Créer une expérience distincte de `webrtc-preview` sans getUserMedia : **une session VisionCamera v5 → output natif réduit → VideoSource WebRTC**, d'abord 720p30 SDR/H.264, audio OFF.
+Pairing uses random identities and per-pair secrets in SecureStore, without hardware identifiers or Bluetooth permission. Initial QR pairing is remembered on both endpoints. Presence expires after 12 seconds, renews every four seconds and disappears when occupied. Availability is checked again before reconnecting. Local rename, last connection and forget actions use native sheets.
 
-- Identifier et documenter l'extension native v5 qui donne accès aux buffers/session existants. Si v5 ne permet pas l'ownership partagé requis, documenter ce blocage avant d'ouvrir une autre session.
-- iOS : buffers AVFoundation vers RTCVideoFrame/VideoSource, timestamps de la clock native conservés ; gestion retain/release et rotation.
-- Android : ImageProxy/CameraX vers capturerObserver.onFrameCaptured ; conversion YUV native bornée, fermeture de chaque buffer, aucune copie vers JS.
-- Valider un seul open device, pas de fuite après 20 min, backpressure qui sacrifie le preview, puis iPhone ↔ Pixel dans les deux sens.
-- Ajouter ensuite le writer local au même propriétaire ; vérifier 20 cycles start/stop et coupure réseau 5 s avec fichier intact. Aucun vrai fichier avant cette preuve de propriété unique.
+The three-bar indicator uses measured WebRTC RTT, loss and jitter where available. It stays neutral before a measurement and does not represent Wi-Fi RSSI. The Mac still hosts the ephemeral LAN rendezvous; there is no standalone Bonjour discovery or phone-hosted signaling server.
 
-Prérequis immédiat pour compléter la validation de fondation : installer Xcode complet et CocoaPods, lancer `pnpm build:ios`, puis un Dev Client sur iPhone réel. L'installation de Xcode n'a pas été lancée automatiquement.
+Nine focused device/signaling tests passed during that slice, covering stored identity, handshake and presence behavior. A real iPhone Camera → iOS Simulator Monitor session confirmed pairing on both sides, 30 fps received, 6.8 ms Monitor RTT and zero packet loss in one sample. Manual persistence/reconnection and a pair of physical phones remain to be checked.
+
+## Recording and gallery lifecycle
+
+The local writer retains files in the private app directory and imports them through PhotoKit/MediaStore only after native finalization. Failed imports retain the file for retry. Focused tests cover stop-during-start/double-tap coordination and gallery denial with retained-file recovery. No network stream is recorded.
+
+The remote-control capability contract remains a fixture-based stub. It is not used to configure the real local camera. Full file playback, audio, rotation, interruption recovery and gallery validation are tracked in [the recording protocol](e2e/local-recording.md).
+
+## Earlier foundation evidence
+
+These results describe earlier milestones and must not be mistaken for validation of every later change.
+
+| Check                                 | Recorded result                                                                                |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Strict TypeScript, ESLint, formatting | Passed through `pnpm check`                                                                    |
+| Initial automated tests               | 14/14 camera/session/signaling and quality-selection invariants                                |
+| Architectural boundaries              | Pure domain; no product import of spike/capturer                                               |
+| pnpm peers                            | No conflict                                                                                    |
+| iOS/Android prebuild                  | Passed; local modules autolinked                                                               |
+| Production Metro exports              | iOS/Android Hermes and web generated; native bundles excluded spike markers and `rec-mock`     |
+| Initial Android UI build              | ARM64 `assembleDebug` passed, 600 tasks, 2 min 23 s                                            |
+| APK                                   | Approximately 112 MiB; native camera/Nitro/WebRTC libraries and capability fixture included    |
+| Android runtime                       | Pixel_10 AVD, Android 16/API 36, 36.1 ARM64 image; Kotlin fixture and development route opened |
+| iOS runtime                           | Xcode 26.6 / SDK 26.5, ARM64 Simulator build passed; Swift fixture loaded                      |
+| Web                                   | Camera/Monitor scaffold navigation and dependent fixture settings inspected                    |
+| Expo Doctor                           | 20/21; WebRTC New Architecture metadata and unpublished local module remain caveats            |
+| Physical phones                       | iPhone tested; no physical Pixel tested                                                        |
+
+Native UI migration checks included Android 150% text, dark mode, landscape, sheet swipe/Back and retaining 60 fps in the historical fixture picker. iOS checks included both roles, medium/large sheets, preserving selection, rotation, accessibility text and live Dynamic Type changes. These are historical scaffold tests; VoiceOver/TalkBack and predictive Back are not certified.
+
+The old visual baseline remains in `docs/research/native-ui-2026-09-09/`. It records the former French interface. New documentation and current app copy use English. Current device artifacts and binaries remain ignored under `e2e/artifacts/` and `.native-tools/`.
+
+## iPhone installation and WebRTC evidence
+
+The physical iPhone was paired with the Mac and Developer Mode enabled. A Personal Team build passed `codesign --verify --deep --strict`; its provisioning profile allowed the device and debugging. An initial ExpoModulesJSI `errSecInternalComponent` signing failure was resolved by retrying signing and the incremental build. Device-side profile trust was required before the first launch.
+
+Simulator signing must remain enabled with an ad hoc identity to retain Keychain access. `scripts/build-ios.sh` preserves this. Device binaries are generated under `.native-tools/ios-device-build/`; Simulator binaries cannot be installed on a phone.
+
+Metro ran on LAN port 8087 and signaling on 8787. The development screen exposes temporary debugger controls that use the same session and validated descriptor as its buttons. A manual share/paste path supports the Simulator without camera scanning.
+
+An earlier iPhone → Simulator sample received H.264 1280 × 720 at 30 fps, with 4,824 decoded frames and no reported packet loss, dropped frames or freeze. VideoToolbox reported `powerEfficientEncoder=1`; this is not evidence of hardware decoding on a physical Monitor. Ping RTT samples were 10.48 ms and 7.29 ms. The `rec-mock` echo succeeded without recording. After leaving the screens, a new session restored 30 fps and reached 1,080 decoded frames; no automatic reconnect was claimed.
+
+## Tooling decisions
+
+- Mise pins JDK 17; Android Studio's JBR 25 previously failed CMake.
+- Xcode is selected per process, without changing global `xcode-select`.
+- Hermes `250829098.0.17` archive URLs returned 404 at validation time. Source builds use `hermes-v250829098.0.17`, revision `3477757eb2475555cf8d8df24bfb1deb0613880d`.
+- `buildReactNativeFromSource: true` and `usePrecompiledModules: false` avoid precompiled Expo modules expecting React.framework. Keep the native cache for incremental builds.
+- Metro resolves Worklets, Reanimated and Nitro through root dependencies. This avoids the previous JS 0.10.1/0.12.2 Worklets duplication against the 0.10.1 native binary (`valueUnpacker not found`).
+- Exact versions and the lockfile are retained. CameraX and Material alpha versions, WebRTC New Architecture compatibility and target-SDK permission changes still require device validation.
+
+## Next camera milestone
+
+Connect the existing native recording owner to a reduced WebRTC VideoSource: initially 720p30 SDR/H.264, audio off. Preserve native capture timestamps, buffer ownership and rotation. Android must close every ImageProxy; no frames cross JS. Backpressure should sacrifice preview before recording.
+
+Validate one camera open, no leaks during 20 minutes, both physical iPhone/Android directions, 20 recording start/stop cycles and a five-second network interruption with an intact file. Keep local recording independent from transport throughout.
+
+[Architecture](docs/architecture.md) · [Native UI](docs/native-ui-ux.md) · [Native camera APIs](docs/research/native-camera-capabilities.md) · [Obstacles](docs/obstacles.md) · [Device lab](e2e/README.md).

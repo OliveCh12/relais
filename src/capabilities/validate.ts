@@ -59,7 +59,7 @@ export function parseCapabilities(value: unknown): CameraCapabilities {
     ) ||
     (value.source === 'stub' && (value.canPreview || value.canRecord))
   )
-    throw new Error('Capacités caméra invalides ou incompatibles.');
+    throw new Error('Invalid or incompatible camera capabilities.');
   return value as unknown as CameraCapabilities;
 }
 
@@ -67,7 +67,7 @@ export function defaultConfiguration(capabilities: CameraCapabilities): CameraCo
   const lens = capabilities.lenses[0];
   const fileQuality = lens?.fileQualities[0];
   const previewQuality = capabilities.previewQualities[0];
-  if (!lens || !fileQuality || !previewQuality) throw new Error('Aucun profil disponible.');
+  if (!lens || !fileQuality || !previewQuality) throw new Error('No profile available.');
   return { lens: lens.id, zoom: lens.zoom.min, torch: false, fileQuality, previewQuality };
 }
 
@@ -101,5 +101,5 @@ export function validateConfiguration(
         item.maxBitrate === preview.maxBitrate,
     )
   )
-    throw new Error('Combinaison caméra non supportée.');
+    throw new Error('Unsupported camera combination.');
 }

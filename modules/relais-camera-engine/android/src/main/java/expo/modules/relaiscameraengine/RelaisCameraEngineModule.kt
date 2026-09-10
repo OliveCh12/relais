@@ -9,6 +9,18 @@ import org.json.JSONObject
 class RelaisCameraEngineModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("RelaisCameraEngine")
+    AsyncFunction("getRecordingProfiles") { deviceId: String, stabilization: Boolean ->
+      RecordingProfiles.query(appContext.reactContext ?: throw CameraFixtureException(), deviceId, stabilization)
+    }
+    AsyncFunction("getPendingRecordings") {
+      RecordingLibrary.pending(appContext.reactContext ?: throw CameraFixtureException())
+    }
+    AsyncFunction("createRecordingPath") {
+      RecordingLibrary.createPath(appContext.reactContext ?: throw CameraFixtureException())
+    }
+    AsyncFunction("saveVideoToLibrary") { path: String ->
+      RecordingLibrary.save(appContext.reactContext ?: throw CameraFixtureException(), path)
+    }
     Events("thermal", "battery", "droppedFrames", "recordingStarted", "error")
 
     AsyncFunction("getCapabilities") {
@@ -37,5 +49,5 @@ class RelaisCameraEngineModule : Module() {
   }
 }
 
-class CameraEngineStubException : CodedException("Pipeline caméra natif non implémenté. Aucun fichier créé.")
-class CameraFixtureException : CodedException("Fixture de capacités absente ou invalide.")
+class CameraEngineStubException : CodedException("Native camera pipeline not implemented. No file created.")
+class CameraFixtureException : CodedException("Capability fixture missing or invalid.")

@@ -1,42 +1,48 @@
-# Pairing et device lab
+# Pairing and device lab
 
-## Produit cible
+## Current remembered-device flow
 
-Caméra héberge un petit serveur LAN ; QR versionné contenant adresse privée, session éphémère et token. Moniteur scanne, ferme son scanner, puis échange SDP/ICE. Média WebRTC P2P avec ICE host only, sans internet/STUN public/TURN. Hotspot Caméra à tester, pas garanti : isolation clients, routage entre hôte et client et adresses diffèrent selon OS. Bonjour pourra découvrir un service précis ; aucun service n'est annoncé dans cette fondation.
+Open **Monitor** to access remembered devices. The first QR pairing saves both phones; later sharing sessions are found through an ephemeral announcement on the Mac's LAN server. Choose **Share this phone's view** on the Camera phone, then tap its **Available** name on the Monitor. Local names, last connection, forgetting and measured link quality use native interfaces. Both apps must stay open.
 
-Commandes produit sur DataChannel : ID, action, ACK, état autoritaire et erreurs. L'enregistrement ne dépend jamais du canal réseau. Le QR de l'écran produit est une démonstration explicitement marquée, non accepté par le spike.
+See [protocol and limitations](research/remembered-devices.md) and [the short check](../e2e/remembered-devices.md). Remembered devices never reuse an expired QR descriptor.
 
-## Spike 0 livré
+## Product target
+
+The Camera phone should host a small LAN server. A versioned QR contains its private address, ephemeral session and token. The Monitor scans, closes its scanner, then exchanges SDP/ICE. Media uses peer-to-peer WebRTC with host ICE only: no internet, public STUN or TURN. Camera-hosted hotspots require independent testing: client isolation, host/client routing and addresses differ across operating systems. Bonjour may discover a specific service later; none is advertised now.
+
+Product DataChannel commands carry an ID, action, acknowledgement, authoritative state and errors. Recording must never depend on the network channel. The historical product-screen demo QR is explicitly labeled and rejected by the spike.
+
+## Delivered spike
 
 `THROW AWAY — not the product camera pipeline`.
 
-Un Mac du même LAN héberge `pnpm spike:signaling`. Le terminal affiche son adresse privée et son port. Autoriser le port 8787 sur le pare-feu si nécessaire. Les deux téléphones utilisent un Dev Client compilé et ouvrent « Spike WebRTC » depuis l'accueil dev.
+A Mac on the same LAN runs `pnpm spike:signaling`. Its terminal prints a private address and port. Allow port 8787 through the firewall if needed. Both phones use compiled Dev Clients. The technical spike is presented as **Monitor** / live preview in the app.
 
-1. Caméra : saisir l'URL HTTP privée affichée par le serveur ; lancer « Créer une session ». Autoriser caméra. Le QR apparaît après création de l'offre.
-2. Moniteur : scanner ce QR, puis « Rejoindre la Caméra » ; le scanner est démonté avant connexion. Le flux distant s'affiche après échange SDP/ICE ; aucun accès micro.
-3. Moniteur : envoyer `ping`, puis `rec-mock`. Le premier affiche le RTT ; le second confirme un écho sans commencer de rec.
-4. Quitter l'écran ou passer en background libère tracks, peer connection et timers. Créer un nouveau QR après expiration/déconnexion. Reconnexion automatique hors spike 0.
+1. Camera: use the private HTTP server address, then share this phone's view. Grant camera access. The QR appears after the offer is created.
+2. Monitor: scan the QR, or paste its descriptor in connection options. The scanner unmounts before joining. Remote video appears after SDP/ICE exchange; the microphone is not accessed.
+3. Developer diagnostics can send `ping` and `rec-mock`. Ping measures RTT; rec-mock acknowledges an echo without starting recording.
+4. Leaving the screen or backgrounding releases tracks, peer connection and timers. Create a new sharing session after expiration or failure. Remembered-device selection simplifies joining a new session; it does not silently reopen the camera.
 
-Le serveur ne transporte que SDP/ICE, conserve les sessions en mémoire 10 min, borne leur nombre et taille, et sépare les tokens Caméra/Moniteur. QR refusés si format, version, IP privée, session, token ou expiration invalides. Pas de journal des tokens/SDP, pas de médias stockés. HTTP sur LAN n'est pas une authentification forte ; rester sur un réseau de test maîtrisé. La suppression active à la fermeture Caméra et l'expiration libèrent l'état.
+The server transports only SDP/ICE, retains sessions in memory for ten minutes, bounds their number and size, and separates Camera/Monitor tokens. Invalid format, version, private IP, session, token or expiration causes rejection. Tokens and SDP are not logged; media is not stored. HTTP on a LAN is not strong authentication. Active Camera closure and expiration release server state.
 
-Le serveur Mac est un écart de spike explicite. Le fonctionnement autonome à deux téléphones demandera un serveur natif sur Caméra et une validation hotspot indépendante. Le RTT affiché n'est pas la latence glass-to-glass.
+The Mac server is an explicit prototype limitation. Standalone two-phone operation needs a native server on the Camera and separate hotspot validation. Displayed RTT is not glass-to-glass latency.
 
-## Trois scénarios d'acceptation
+## Acceptance scenarios
 
-| Scénario                       | Procédure                                                                                    | Attendu / état fondation                                                                                                                          |
-| ------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iPhone Caméra → Pixel Moniteur | Box Wi-Fi, QR, preview 20 min, ping/rec-mock ; répéter hotspot                               | Pairing < 15 s, frame < 2 s, vidéo p95 < 300 ms ; à mesurer                                                                                       |
-| Pixel Caméra → iPhone Moniteur | Même séquence inverse ; permissions refusées puis accordées                                  | Même budgets, pas d'écran bloqué ; à mesurer                                                                                                      |
-| Wi-Fi perdu 5 s pendant rec    | Après pipeline natif : lancer vrai fichier, couper Wi-Fi, rétablir, resynchroniser puis Stop | Fichier intact, preview revient, aucune commande Stop issue de la perte réseau. Invariant unitaire maintenant ; scénario matériel bloqué par stub |
+| Scenario                               | Procedure                                                                                               | Target / current limitation                                                                                                                                |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iPhone Camera → Pixel Monitor          | Wi-Fi router, QR, 20-minute preview, ping/rec-mock; repeat with hotspot                                 | Pairing < 15 s, first rendered frame < 2 s, video p95 < 300 ms; measurement pending                                                                        |
+| Pixel Camera → iPhone Monitor          | Reverse direction; deny then grant permissions                                                          | Same budgets; no blocked navigation; measurement pending                                                                                                   |
+| Five-second Wi-Fi loss while recording | After native streaming integration: start a real file, disable Wi-Fi, restore, resynchronize, then stop | Intact file, preview returns, no Stop caused by network loss. Unit invariant exists; simultaneous hardware scenario remains blocked by missing integration |
 
-## Device lab / testdroid-ready
+## Device lab checklist
 
-- [ ] iPhone 17 Pro, iOS 26 puis 27 si disponible ; relever build OS exact.
-- [ ] Pixel 11 Pro, Android 16/17 selon images réellement disponibles ; ne pas supposer qu'un OS antérieur est installable.
-- [ ] iOS Simulator et Android emulator : navigation/permissions/stub, aucune conclusion sur qualité capteur.
-- [ ] Device réel USB : build signé, démarrage, appel natif getCapabilities.
-- [ ] Même box ; hotspot de chaque téléphone ; AP isolation ; internet débranché.
-- [ ] Refus caméra/LAN, révocation, QR invalide/expiré, session quittée et background.
-- [ ] Logs et captures anonymisés dans `e2e/artifacts/` (ignoré par git).
+- [ ] iPhone 17 Pro: record exact iOS build; test newer OS versions only when available.
+- [ ] Physical Pixel: record exact model and available Android image; do not assume an older OS is installable.
+- [ ] Simulators/emulators: navigation, permissions and fixture behavior only; no sensor-quality conclusions.
+- [ ] USB hardware: signed build, startup and native capability discovery.
+- [ ] Same router, each phone's hotspot, AP isolation and disconnected internet.
+- [ ] Permission denial/revocation, invalid/expired QR, closed session and backgrounding.
+- [ ] Anonymized logs and screenshots in ignored `e2e/artifacts/`.
 
-Les scripts de build préparent les binaires. `e2e/README.md` définit le dépôt d'artefacts et le protocole de fumée à porter dans Testdroid/Bitbar ; aucune CI device farm n'est créée.
+Build scripts prepare binaries. [e2e/README.md](../e2e/README.md) describes artifacts and smoke checks for a future Testdroid/Bitbar integration. No device-farm CI has been created.

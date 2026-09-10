@@ -4,6 +4,25 @@ import Foundation
 public final class RelaisCameraEngineModule: Module {
   public func definition() -> ModuleDefinition {
     Name("RelaisCameraEngine")
+    View(AppleCameraView.self) {
+      Events("onClose")
+    }
+    #if DEBUG
+    AsyncFunction("cameraDebug") { (action: String) throws -> [String: Any] in
+      guard let view = AppleCameraView.current else { return ["mounted": false] }
+      return try view.debug(action)
+    }.runOnQueue(.main)
+    #endif
+    AsyncFunction("getPendingRecordings") { () -> [String] in
+      let files = try FileManager.default.contentsOfDirectory(at: RecordingLibrary.directory(), includingPropertiesForKeys: [.fileSizeKey])
+      return files.filter { ["mov", "mp4"].contains($0.pathExtension) && ((try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) > 0 }.map(\.path).sorted()
+    }
+    AsyncFunction("createRecordingPath") { () -> String in
+      try RecordingLibrary.createPath()
+    }
+    AsyncFunction("saveVideoToLibrary") { (path: String) async throws -> String in
+      try await RecordingLibrary.save(path: path)
+    }
     Events("thermal", "battery", "droppedFrames", "recordingStarted", "error")
 
     AsyncFunction("getCapabilities") { () throws -> [String: Any] in
@@ -26,9 +45,9 @@ public final class RelaisCameraEngineModule: Module {
 }
 
 private final class CameraEngineStubException: Exception {
-  override var reason: String { "Pipeline caméra natif non implémenté. Aucun fichier créé." }
+  override var reason: String { "Native camera pipeline not implemented. No file created." }
 }
 
 private final class CameraFixtureException: Exception {
-  override var reason: String { "Fixture de capacités absente ou invalide." }
+  override var reason: String { "Capability fixture missing or invalid." }
 }

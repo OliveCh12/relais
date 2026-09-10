@@ -2,10 +2,14 @@
 
 **THROW AWAY — not the product camera pipeline**
 
-Seul dossier autorisé à ouvrir getUserMedia. Audio OFF, aucune rec, aucune dépendance au moteur produit. Point d'entrée `/dev/webrtc`, accessible seulement en dev ; écran web explicite sans import natif.
+This is the only directory allowed to open `getUserMedia`. Audio is off, recording is unavailable, and the spike does not depend on the product camera engine. Its `/dev/webrtc` entry point is development-only; the web screen imports no native implementation.
 
-Serveur Node local : `pnpm spike:signaling`. Deux Dev Clients sur le même LAN, Caméra saisit l'URL du Mac et affiche un QR ; Moniteur scanne. SDP avec ICE host rassemblés avant publication (pas de trickle). Le QR ne contient pas le SDP. Aucun STUN/TURN/cloud.
+Run `pnpm spike:signaling` on a Mac on the same LAN as both compiled Dev Clients. The Camera phone uses the Mac's private HTTP address and displays a QR code; the Monitor scans it. Host ICE candidates are gathered before SDP publication, without trickle ICE. The QR does not contain SDP. There is no STUN, TURN or cloud service.
 
-`session.ts` possède la peer connection, les tracks et les timers. Quitter l'écran/background/échec ferme les ressources. La permission caméra iOS peut rendre l'app inactive temporairement : seul background ferme le spike. Le scanner est démonté avant de lancer la connexion Moniteur. Un échec réseau exige une nouvelle session : aucune reconnection produit prétendue ici.
+For an iOS Simulator monitor, use **Share code** on the Camera iPhone and the system Copy action. Transfer that text to the Mac clipboard, using Universal Clipboard if available, then paste it through the Monitor's connection options. This is the same QR descriptor, with the same token and expiration checks. Keep the Camera app in the foreground: backgrounding closes its session. iPhone-to-simulator reception was verified at 720p30 using the test commands below; the complete sharing/clipboard journey still needs a manual check.
 
-RTT ping/pong mesuré avec `performance.now` sur un seul device. Stats inbound vidéo toutes les secondes ; valeurs manquantes affichées « — ». `rec-mock` est un écho, jamais une action caméra. Voir `docs/pairing.md` et `docs/energy-and-perf.md` pour la validation sur matériel.
+`session.ts` owns the peer connection, tracks and timers. Leaving the screen, backgrounding or failure releases them. An iOS permission prompt can temporarily make the app inactive; only background closes the spike. Unmount the QR scanner before connecting the Monitor. A failed session requires a new session; this is not automatic product reconnection.
+
+Ping/pong RTT uses `performance.now()` on one device. Inbound video statistics update once per second; missing values appear as “—”. `rec-mock` is an echo, never a camera action. See `docs/pairing.md` and `docs/energy-and-perf.md` for hardware validation.
+
+A mounted screen exposes `globalThis.__relaisSpikeTest` only in development: `camera(url)`, `monitor(codeJson)`, `snapshot()`, `diagnostics()`, `ping()`, `recMock()` and `stop()`. These use the same session as the buttons and create no second camera owner. The probe is removed on unmount. `diagnostics()` reads WebRTC statistics, never pixels. Never copy snapshot tokens into shared reports.

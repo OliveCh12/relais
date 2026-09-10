@@ -3,9 +3,9 @@ import { AppText, Screen } from '../../components/ui';
 export default function SpikeScreen() {
   return (
     <Screen>
-      <AppText variant="heading">Spike réservé au Dev Client</AppText>
+      <AppText variant="heading">Live preview requires Dev Client</AppText>
       <AppText variant="muted">
-        Utilisez deux téléphones iOS/Android. Le web permet de consulter les écrans squelette.
+        Use two iOS/Android phones. The web shows the prototype screens.
       </AppText>
     </Screen>
   );

@@ -12,7 +12,8 @@ export function useCapabilities() {
         if (active) setCapabilities(result);
       },
       (reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : 'Module indisponible');
+        if (__DEV__) console.info('Relais capabilities unavailable:', reason);
+        if (active) setError('Camera settings unavailable. Reopen this screen to try again.');
       },
     );
     return () => {

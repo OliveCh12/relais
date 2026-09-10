@@ -1,29 +1,52 @@
 import type { PropsWithChildren } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type TextInputProps,
   type TextProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../design/tokens';
+import { useAppTheme } from '../design/useAppTheme';
+import { ActionButton as Button } from './ActionButton';
+export { Button };
 
 export function AppText({
   variant = 'body',
   style,
   ...props
 }: TextProps & { variant?: 'title' | 'heading' | 'body' | 'muted' | 'label' }) {
-  return <Text {...props} style={[styles.text, styles[variant], style]} />;
+  const colors = useAppTheme();
+  const { fontScale } = useWindowDimensions();
+  const color =
+    Platform.OS === 'web'
+      ? undefined
+      : variant === 'muted' || variant === 'label'
+        ? colors.muted
+        : colors.text;
+  return (
+    <Text
+      key={fontScale}
+      {...props}
+      style={[styles.text, styles[variant], color ? { color } : undefined, style]}
+    />
+  );
 }
 
 export function Screen({ children }: PropsWithChildren) {
+  const colors = useAppTheme();
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView
+      edges={['left', 'right', 'bottom']}
+      style={[styles.safe, Platform.OS !== 'web' && { backgroundColor: colors.background }]}
+    >
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.screen}>
         {children}
       </ScrollView>
@@ -32,7 +55,17 @@ export function Screen({ children }: PropsWithChildren) {
 }
 
 export function Card({ children }: PropsWithChildren) {
-  return <View style={styles.card}>{children}</View>;
+  const colors = useAppTheme();
+  return (
+    <View
+      style={[
+        styles.card,
+        Platform.OS !== 'web' && { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 export function Badge({ children }: PropsWithChildren) {
@@ -40,41 +73,6 @@ export function Badge({ children }: PropsWithChildren) {
     <View style={styles.badge}>
       <AppText variant="label">{children}</AppText>
     </View>
-  );
-}
-
-export function Button({
-  label,
-  onPress,
-  disabled = false,
-  secondary = false,
-  testID,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  secondary?: boolean;
-  testID?: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      testID={testID}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        secondary && styles.secondary,
-        (disabled || pressed) && styles.dim,
-      ]}
-    >
-      <AppText
-        style={{ color: secondary ? theme.colors.text : theme.colors.onAccent, fontWeight: '600' }}
-      >
-        {label}
-      </AppText>
-    </Pressable>
   );
 }
 
@@ -130,7 +128,7 @@ export function PreviewPlaceholder({ label }: { label: string }) {
     <View style={styles.preview}>
       <View style={styles.reticle} />
       <AppText variant="label">{label}</AppText>
-      <AppText variant="muted">Aucune image capturée</AppText>
+      <AppText variant="muted">No image captured</AppText>
       <View style={styles.previewFooter}>
         <AppText variant="label">9:16</AppText>
         <AppText variant="label">LOCAL</AppText>
@@ -143,7 +141,7 @@ export function RecordButton() {
   return (
     <View style={styles.recordWrap}>
       <Pressable
-        accessibilityLabel="Enregistrer — indisponible dans la fondation"
+        accessibilityLabel="Record — unavailable in the foundation"
         accessibilityRole="button"
         accessibilityState={{ disabled: true }}
         disabled
@@ -151,7 +149,7 @@ export function RecordButton() {
       >
         <View style={styles.recordInner} />
       </Pressable>
-      <AppText variant="muted">Rec disponible après intégration du moteur</AppText>
+      <AppText variant="muted">Recording available after engine integration</AppText>
     </View>
   );
 }
@@ -165,7 +163,7 @@ export function Sheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modal}>
         <Pressable
-          accessibilityLabel="Fermer les réglages"
+          accessibilityLabel="Close settings"
           accessibilityRole="button"
           style={styles.scrim}
           onPress={onClose}
@@ -173,7 +171,7 @@ export function Sheet({
         <SafeAreaView edges={['bottom']} style={styles.sheet}>
           <ScrollView contentContainerStyle={styles.sheetContent}>
             {children}
-            <Button label="Terminé" onPress={onClose} />
+            <Button label="Done" onPress={onClose} />
           </ScrollView>
         </SafeAreaView>
       </View>

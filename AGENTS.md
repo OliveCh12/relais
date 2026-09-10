@@ -1,16 +1,21 @@
-# Relais — règles de fondation
+# Relais — development rules
 
-- App unique iOS/Android, rôle Caméra ou Moniteur. Expo CNG + Dev Client, jamais Expo Go.
-- pnpm, TypeScript strict, versions exactes, commits SSH signés. Docs en français, code en anglais.
-- Le capteur a UN propriétaire natif : session VisionCamera v5 (AVFoundation/CameraX), pilotée uniquement par `RelaisCameraEngine`. Ne pas créer une deuxième session dans le module Relais.
-- Le fichier local sort du pipeline natif. Le preview réduit sort vers une VideoSource WebRTC native. Aucune frame ne traverse JS ; aucun enregistrement du flux WebRTC.
-- `getUserMedia` est autorisé uniquement dans `src/spikes/webrtc-preview/`. Aucun import du spike depuis le produit ; entrée dev séparée et interdite en release.
-- `expo-camera` ne sert qu'au QR ; démonter le scanner avant d'ouvrir la caméra WebRTC ou produit.
-- La rec locale et l'état du transport ont des cycles de vie distincts. Une déconnexion ne commande jamais stopRecording.
-- Le stub annonce `source: stub`, `canRecord: false`, `canPreview: false`. Ne pas simuler un fichier réussi, un device détecté, un build natif ni une mesure de latence.
-- Les réglages sont des combinaisons valides par optique, pas le produit cartésien de listes indépendantes. Revalider côté natif avant chaque configure.
-- Les capacités viennent du téléphone Caméra ; ne pas utiliser celles du Moniteur pour piloter la Caméra. Fixtures clairement identifiées tant que l'échange n'est pas branché.
-- Ne pas upgrader Expo/RN, WebRTC et VisionCamera ensemble. Vérifier O20 et consigner les versions et résultats dans STATUS.md.
-- `ios/` et `android/` sont générés. Les modifications durables vont dans les plugins de configuration et `modules/`.
-- Stop fondation : docs, navigation squelette, bridge stub, spike isolé, contrôles TS/lint/tests/bundles/prebuild. Les builds natifs et essais matériels restent distincts ; signaler tout prérequis manquant.
-- Hors scope : comptes, média cloud, SFU/TURN, diffusion publique, multicam produit, traitement couleur, publication Store.
+- One iOS/Android app with Camera and Monitor roles. Expo CNG + Dev Client; never Expo Go.
+- Use pnpm, strict TypeScript, exact dependency versions and SSH-signed commits. Documentation, code comments and application copy must be in English.
+- Mobile UI uses actual SwiftUI controls on iOS and Jetpack Compose/Material on Android, with platform-specific presentation. Prefer Expo UI bindings when they cover the requirement; keep the web presentation independent. Use SF Symbols on iOS and individual Material Symbols imports on Android. Give actions accessible labels. Do not reintroduce custom web Pressables or sheets into mobile flows. See `docs/native-ui-ux.md`.
+- Keep the camera viewfinder and essential controls fixed; use native settings and fix the role for each session. Follow Apple Camera and Pixel Camera conventions without adding unsupported modes or a second camera owner. Add tabs only for real navigation sections.
+- `RelaisCameraEngine` has ONE native camera owner: direct AVFoundation on iOS (`AppleCameraModel`, SwiftUI controls), VisionCamera v5 / CameraX on Android (`LocalCamera`). The September 10 iOS migration enables Apple's public Cinematic capture APIs. Never mount both capture owners or the WebRTC spike together.
+- The local file comes from the native pipeline. The target reduced preview feeds a native WebRTC VideoSource. No video frames cross JavaScript; never record the network stream. The simultaneous recording/streaming connection is not implemented yet.
+- `getUserMedia` is allowed only inside `src/spikes/webrtc-preview/`. Product code must not import the spike; its entry point is development-only and excluded from release.
+- `expo-camera` is used only for QR scanning. Unmount the scanner before opening either recording or WebRTC capture.
+- Recording and transport have independent lifecycles. A disconnect must never trigger `stopRecording`.
+- Remembered devices use random identities and pairing secrets in SecureStore (iOS Keychain / Android Keystore). Do not save an expiring QR as a permanent connection. Availability comes from an ephemeral sharing announcement, never just a saved row. Do not activate the camera in the background. The Mac server remains an explicit prototype limitation. Signal bars describe measured link quality, never invented Wi-Fi RSSI.
+- The historical remote-control stub reports `source: stub`, `canRecord: false`, `canPreview: false`. Never simulate successful files, detected hardware, native builds or latency measurements.
+- Local capture uses `AVCaptureMovieFileOutput` on iOS and `CameraVideoOutput` on Android. Keep it distinct from the historical remote-control stub. Write to PhotoKit/MediaStore only after the native finalization callback; retain the private file when import fails.
+- Local settings come from AVFoundation formats and Cinematic-specific frame-rate ranges, or CameraX profiles validated with Preview and VideoCapture together. Display the effective configuration, not specifications from a product page. Cinematic stabilization is not Cinematic depth capture. Native `cameraDebug` and JS `__relaisNativeCameraTest` probes are development-only.
+- Settings are valid combinations per camera, not a Cartesian product of independent lists. Revalidate natively before every configuration.
+- Remote capabilities belong to the Camera phone, not the Monitor. Label fixtures until the real exchange is connected.
+- Do not upgrade Expo/RN, WebRTC and VisionCamera together. Check O20 and record versions and evidence in STATUS.md.
+- `ios/` and `android/` are generated. Put durable native changes in config plugins and `modules/`.
+- Keep build, bundle, prebuild and physical-device evidence separate. State missing prerequisites and preserve the agreed scope.
+- Out of scope: accounts, cloud media, SFU/TURN, public streaming, product multicam, color grading and Store publication.

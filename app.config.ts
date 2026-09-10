@@ -1,28 +1,41 @@
 import type { ExpoConfig } from 'expo/config';
 
+const appleTeamId = process.env.RELAIS_APPLE_TEAM_ID;
+const cameraPermission =
+  'Relais uses the camera to scan QR codes, record video and share a local live preview.';
+const microphonePermission =
+  'Relais uses this phone’s microphone to record audio in the local video file.';
+
 const config: ExpoConfig = {
   name: 'Relais',
   slug: 'relais',
   scheme: 'relais',
   version: '0.1.0',
-  orientation: 'portrait',
-  userInterfaceStyle: 'dark',
+  icon: './assets/icon.png',
+  orientation: 'default',
+  userInterfaceStyle: 'automatic',
   ios: {
     bundleIdentifier: 'app.relais.mobile',
+    ...(appleTeamId ? { appleTeamId } : {}),
     supportsTablet: false,
     infoPlist: {
-      NSCameraUsageDescription:
-        'Relais utilise la caméra pour scanner un QR et filmer depuis le téléphone Caméra.',
-      NSMicrophoneUsageDescription:
-        'Relais utilise le micro du téléphone Caméra pour le son du fichier local.',
+      CADisableMinimumFrameDurationOnPhone: true,
+      EXDevMenuShowFloatingActionButton: false,
+      NSCameraUsageDescription: cameraPermission,
+      NSMicrophoneUsageDescription: microphonePermission,
+      NSPhotoLibraryAddUsageDescription: 'Relais adds the videos you record to Photos.',
       NSLocalNetworkUsageDescription:
-        'Relais relie vos deux téléphones sur votre Wi-Fi, sans envoyer de vidéo sur internet.',
+        'Relais connects your two phones over Wi-Fi without sending video over the internet.',
       NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
       ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
     package: 'app.relais.mobile',
+    adaptiveIcon: {
+      foregroundImage: './assets/adaptive-icon.png',
+      backgroundColor: '#007AFF',
+    },
     permissions: [
       'android.permission.CAMERA',
       'android.permission.RECORD_AUDIO',
@@ -37,12 +50,24 @@ const config: ExpoConfig = {
     ],
   },
   plugins: [
+    './plugins/with-dev-menu.cjs',
     'expo-router',
+    'expo-secure-store',
+    [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#F2F2F7',
+        image: './assets/splash-symbol.png',
+        imageWidth: 72,
+        resizeMode: 'contain',
+        dark: { backgroundColor: '#000000', image: './assets/splash-symbol-dark.png' },
+      },
+    ],
     ['expo-dev-client', { launchMode: 'most-recent' }],
     [
       'expo-camera',
       {
-        cameraPermission: 'Relais utilise la caméra pour scanner le QR de votre autre téléphone.',
+        cameraPermission,
         recordAudioAndroid: false,
         barcodeScannerEnabled: true,
       },
@@ -50,12 +75,17 @@ const config: ExpoConfig = {
     [
       '@config-plugins/react-native-webrtc',
       {
-        cameraPermission: 'Relais utilise la caméra pour le retour vidéo local.',
-        microphonePermission:
-          'Relais utilise le micro pour le fichier enregistré sur le téléphone Caméra.',
+        cameraPermission,
+        microphonePermission,
       },
     ],
-    ['expo-build-properties', { android: { usesCleartextTraffic: true } }],
+    [
+      'expo-build-properties',
+      {
+        android: { usesCleartextTraffic: true },
+        ios: { buildReactNativeFromSource: true, usePrecompiledModules: false },
+      },
+    ],
   ],
   experiments: { typedRoutes: true },
 };

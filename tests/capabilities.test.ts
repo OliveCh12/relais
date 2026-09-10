@@ -30,7 +30,7 @@ test('quality validation rejects unsupported cross products and changed profile 
     { ...config, previewQuality: { ...config.previewQuality, width: 3840 } },
     { ...config, lens: 'mock-front', fileQuality: mockCapabilities.lenses[0]!.fileQualities[1]! },
   ])
-    assert.throws(() => validateConfiguration(mockCapabilities, candidate), /non supportée/);
+    assert.throws(() => validateConfiguration(mockCapabilities, candidate), /Unsupported/);
 });
 
 test('capability boundary rejects invalid native payloads and fake stub capture', () => {
@@ -44,5 +44,5 @@ test('capability boundary rejects invalid native payloads and fake stub capture'
     },
     { ...mockCapabilities, lenses: [] },
   ])
-    assert.throws(() => parseCapabilities(candidate), /invalides/);
+    assert.throws(() => parseCapabilities(candidate), /Invalid or incompatible/);
 });

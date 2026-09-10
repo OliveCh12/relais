@@ -9,7 +9,7 @@ test('monitor waits for matching native confirmation', async () => {
       { send: async () => ({ id: '2', ok: true, recording: 'recording' }) },
       command,
     ),
-    /autre commande/,
+    /different command/,
   );
   await assert.rejects(
     sendCameraCommand(

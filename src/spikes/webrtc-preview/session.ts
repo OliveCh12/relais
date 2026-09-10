@@ -9,6 +9,11 @@ import {
   type PairingDescriptor,
 } from '../../signaling/protocol';
 import { parseEcho } from './echo';
+import { deviceRegistry } from '../../connections/storage';
+import { DeviceHandshake } from '../../connections/handshake';
+import { PresencePublisher } from '../../connections/presence';
+import type { SavedDevice } from '../../connections/model';
+import type { LinkSample } from '../../connections/quality';
 
 interface Callbacks {
   status: (value: string) => void;
@@ -17,6 +22,8 @@ interface Callbacks {
   rtt: (value: number) => void;
   stats: (value: { fps: number | null; kbps: number | null }) => void;
   qr: (value: PairingDescriptor) => void;
+  remembered?: (value: SavedDevice) => void;
+  quality?: (value: LinkSample | null) => void;
 }
 
 export class SpikeSession {
@@ -31,14 +38,24 @@ export class SpikeSession {
   private cleanupSession: { server: string; sessionId: string; token: string } | null = null;
   private lastStats: { frames: number; bytes: number; time: number } | null = null;
   private statsBusy = false;
+  private handshake: DeviceHandshake | null = null;
+  private publisher: PresencePublisher | null = null;
+  private lastPackets: { received: number; lost: number } | null = null;
+  private lastPingAt = 0;
+  private lastPong: { rtt: number; time: number } | null = null;
+  private pingStalled = false;
 
   constructor(private readonly callbacks: Callbacks) {
     this.peer.addEventListener('connectionstatechange', () => {
       if (this.abort.signal.aborted) return;
-      callbacks.status(`WebRTC : ${this.peer.connectionState}`);
+      callbacks.status(
+        this.peer.connectionState === 'connected'
+          ? 'Both phones are connected.'
+          : 'Connecting to the other phone…',
+      );
       if (['failed', 'disconnected'].includes(this.peer.connectionState)) {
         this.dispose();
-        callbacks.status('Connexion perdue. Créez une nouvelle session de spike.');
+        callbacks.status('Connection lost. Restart sharing on the Camera phone.');
       }
     });
     this.peer.addEventListener('track', (event) => {
@@ -51,7 +68,7 @@ export class SpikeSession {
   }
 
   private assertActive() {
-    if (this.abort.signal.aborted) throw new Error('Session fermée.');
+    if (this.abort.signal.aborted) throw new Error('Session closed.');
   }
 
   private attachChannel(channel: RTCDataChannel) {
@@ -61,24 +78,46 @@ export class SpikeSession {
     }
     this.channel = channel;
     const update = () => {
-      if (!this.abort.signal.aborted) this.callbacks.channel(channel.readyState === 'open');
+      if (this.abort.signal.aborted) return;
+      this.callbacks.channel(channel.readyState === 'open');
+      if (channel.readyState === 'open') {
+        this.publisher?.stop();
+        void this.handshake?.open();
+      }
     };
     channel.addEventListener('open', update);
     channel.addEventListener('close', update);
     update();
     channel.addEventListener('message', ({ data }) => {
       if (this.abort.signal.aborted) return;
+      this.handshake?.receive(data);
       const message = parseEcho(data);
       if (!message || channel.readyState !== 'open') return;
       if (message.type === 'ping') channel.send(JSON.stringify({ type: 'pong', id: message.id }));
       if (message.type === 'rec-mock')
         channel.send(JSON.stringify({ type: 'rec-mock-ack', id: message.id }));
       if (message.type === 'pong' && message.id === this.pendingPing?.id) {
-        this.callbacks.rtt(performance.now() - this.pendingPing.start);
+        const rtt = performance.now() - this.pendingPing.start;
+        this.lastPong = { rtt, time: performance.now() };
+        this.pingStalled = false;
+        this.callbacks.rtt(rtt);
         this.pendingPing = null;
       }
-      if (message.type === 'rec-mock-ack')
-        this.callbacks.status('rec-mock reçu et confirmé · aucun enregistrement');
+      if (message.type === 'rec-mock-ack') this.callbacks.status('Test command received.');
+    });
+  }
+
+  private prepareHandshake(role: 'camera' | 'monitor', server: string, expected?: SavedDevice) {
+    this.handshake = new DeviceHandshake({
+      role,
+      server,
+      ...(expected ? { expected } : {}),
+      registry: deviceRegistry,
+      send: (text) => {
+        if (this.channel?.readyState === 'open') this.channel.send(text);
+      },
+      remembered: (device) => this.callbacks.remembered?.(device),
+      error: (message) => this.callbacks.status(message),
     });
   }
 
@@ -88,7 +127,7 @@ export class SpikeSession {
       const check = () => {
         if (this.abort.signal.aborted || Date.now() > deadline) {
           finish();
-          reject(new Error('Collecte ICE interrompue ou expirée.'));
+          reject(new Error('Connection is taking too long. Check Wi-Fi and try again.'));
         } else if (this.peer.iceGatheringState === 'complete') {
           finish();
           resolve();
@@ -109,7 +148,8 @@ export class SpikeSession {
 
   async startCamera(serverInput: string) {
     const server = privateLanOrigin(serverInput);
-    this.callbacks.status('Autorisation caméra et ouverture du capteur…');
+    this.prepareHandshake('camera', server);
+    this.callbacks.status('Opening camera…');
     const stream = await mediaDevices.getUserMedia({
       audio: false,
       video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 },
@@ -147,21 +187,36 @@ export class SpikeSession {
       offer,
     );
     this.assertActive();
-    this.callbacks.qr({
+    const descriptor: PairingDescriptor = {
       kind: 'relais-spike',
       version: 1,
       server,
       sessionId: session.sessionId,
       token: session.monitorToken,
       expiresAt: session.expiresAt,
-    });
-    this.callbacks.status('QR prêt. Scannez-le sur le Moniteur.');
+    };
+    this.callbacks.qr(descriptor);
+    try {
+      const identity = await deviceRegistry.getIdentity();
+      this.assertActive();
+      this.publisher = new PresencePublisher(
+        identity.id,
+        deviceRegistry.getSnapshot(),
+        descriptor,
+        session.cameraToken,
+      );
+      this.publisher.start();
+    } catch {
+      this.assertActive();
+    }
+    this.callbacks.status('Ready to connect from your device list or with this QR code.');
     const answer = await pollDescription(
       server,
       session.sessionId,
       session.cameraToken,
       'answer',
       this.abort.signal,
+      Math.max(0, session.expiresAt - Date.now()),
     );
     this.assertActive();
     await this.peer.setRemoteDescription(answer);
@@ -175,14 +230,15 @@ export class SpikeSession {
       try {
         await sender.setParameters(parameters);
       } catch {
-        this.callbacks.status('Limite bitrate non appliquée par WebRTC — vérifier les stats.');
+        this.callbacks.status('Preview quality adjusts automatically.');
       }
     }
     this.startMetrics();
   }
 
-  async startMonitor(descriptor: PairingDescriptor) {
-    this.callbacks.status('Récupération de l’offre LAN…');
+  async startMonitor(descriptor: PairingDescriptor, expected?: SavedDevice) {
+    this.prepareHandshake('monitor', descriptor.server, expected);
+    this.callbacks.status('Connecting to the camera…');
     const offer = await pollDescription(
       descriptor.server,
       descriptor.sessionId,
@@ -215,13 +271,48 @@ export class SpikeSession {
 
   private async readMetrics() {
     if (this.statsBusy || this.abort.signal.aborted) return;
+    const now = performance.now();
+    const pingTimedOut = !!this.pendingPing && now - this.pendingPing.start > 4000;
+    if (pingTimedOut) {
+      this.pendingPing = null;
+      this.pingStalled = true;
+    }
+    if (!this.pendingPing && now - this.lastPingAt > 2000) this.ping();
     this.statsBusy = true;
     try {
       const report: Map<string, Record<string, unknown>> = await this.peer.getStats();
       if (this.abort.signal.aborted) return;
+      const sample: LinkSample = {
+        rtt: this.pingStalled
+          ? 4000
+          : this.lastPong && now - this.lastPong.time < 6000
+            ? this.lastPong.rtt
+            : null,
+        loss: null,
+        jitter: null,
+      };
       for (const value of report.values()) {
+        if (
+          sample.rtt === null &&
+          value.type === 'candidate-pair' &&
+          value.state === 'succeeded' &&
+          (value.nominated === true || value.selected === true) &&
+          typeof value.currentRoundTripTime === 'number'
+        )
+          sample.rtt = value.currentRoundTripTime * 1000;
         if (value.type !== 'inbound-rtp' || (value.kind !== 'video' && value.mediaType !== 'video'))
           continue;
+        if (typeof value.jitter === 'number') sample.jitter = value.jitter;
+        if (typeof value.packetsLost === 'number' && typeof value.packetsReceived === 'number') {
+          const previous = this.lastPackets;
+          const received = value.packetsReceived;
+          const lost = value.packetsLost;
+          if (previous && received >= previous.received && lost >= previous.lost) {
+            const total = received - previous.received + lost - previous.lost;
+            if (total > 0) sample.loss = (lost - previous.lost) / total;
+          }
+          this.lastPackets = { received, lost };
+        }
         const frames = typeof value.framesDecoded === 'number' ? value.framesDecoded : null;
         const bytes = typeof value.bytesReceived === 'number' ? value.bytesReceived : null;
         const time = performance.now();
@@ -241,17 +332,28 @@ export class SpikeSession {
         });
         if (frames !== null && bytes !== null) this.lastStats = { frames, bytes, time };
       }
+      this.callbacks.quality?.(sample);
     } catch {
-      if (!this.abort.signal.aborted)
-        this.callbacks.status('Stats WebRTC indisponibles sur ce device.');
+      if (!this.abort.signal.aborted) this.callbacks.quality?.(null);
     } finally {
       this.statsBusy = false;
     }
   }
 
+  async diagnostics() {
+    this.assertActive();
+    const report: Map<string, Record<string, unknown>> = await this.peer.getStats();
+    return {
+      connectionState: this.peer.connectionState,
+      iceConnectionState: this.peer.iceConnectionState,
+      reports: Array.from(report.values()),
+    };
+  }
+
   ping() {
     if (this.channel?.readyState !== 'open') return;
     this.pendingPing = { id: ++this.sequence, start: performance.now() };
+    this.lastPingAt = this.pendingPing.start;
     this.channel.send(JSON.stringify({ type: 'ping', id: this.sequence }));
   }
 
@@ -276,6 +378,8 @@ export class SpikeSession {
   dispose() {
     if (this.abort.signal.aborted) return;
     this.abort.abort();
+    this.handshake?.close();
+    this.publisher?.stop();
     if (this.metricsTimer) clearInterval(this.metricsTimer);
     this.metricsTimer = null;
     this.channel?.close();
@@ -285,6 +389,7 @@ export class SpikeSession {
     this.peer.close();
     this.pendingPing = null;
     this.callbacks.channel(false);
+    this.callbacks.quality?.(null);
     this.callbacks.stream(null);
     this.deleteSession();
   }

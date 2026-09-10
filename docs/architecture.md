@@ -1,60 +1,71 @@
 # Architecture
 
-Fondation du 9 septembre 2026. Un seul binaire, un rôle choisi au lancement. La cible est iOS ↔ Android, sans compte ni cloud média.
+Foundation: September 9, 2026. Native capture updated September 10. One app selects a Camera or Monitor role; the target is iOS ↔ Android without accounts or cloud media. The diagram describes the target: the local-buffer-to-WebRTC connection is not implemented yet.
 
 ```text
-UI Caméra / Moniteur → session + commandes typées
-                          ↓
-                 RelaisCameraEngine
-                          ↓
-          session native VisionCamera v5
-              AVFoundation / CameraX
-                 propriétaire unique
-                   ├─ fichier local pleine qualité
-                   └─ buffers preview réduits
-                          ↓ natif seulement
-                WebRTC custom VideoSource
-                          ↓ P2P LAN
-                   RTCView Moniteur
+Camera / Monitor UI → session + typed commands
+                            ↓
+                   RelaisCameraEngine
+                            ↓
+                 AVFoundation on iOS
+             VisionCamera / CameraX on Android
+                     one capture owner
+                      ├─ full-quality local file
+                      └─ reduced preview buffers
+                            ↓ native only
+                  WebRTC custom VideoSource
+                            ↓ P2P LAN
+                    Monitor RTCView
 
-DataChannel : commandes, ACK, état et capacités Caméra
-HTTP LAN + QR : SDP / ICE uniquement
+DataChannel: commands, ACKs, Camera state and capabilities
+HTTP LAN + QR: SDP / ICE rendezvous
 ```
 
-## Frontières
+## Boundaries
 
-| Dossier                          | Responsabilité                                                          |
-| -------------------------------- | ----------------------------------------------------------------------- |
-| `app/`                           | Routes expo-router ; aucun accès direct au capteur                      |
-| `src/domain/`                    | Types JSON, commandes ; zéro UI et zéro natif                           |
-| `src/session/`                   | Machine d'état pure et store Zustand                                    |
-| `src/signaling/`                 | Descripteur QR versionné, validation LAN et client HTTP                 |
-| `src/transport/`                 | Contrat preview et DataChannel ; aucun capturer produit JS              |
-| `src/camera/api.ts`              | Interface publique unique du moteur et events                           |
-| `src/camera/native/`             | Adaptateur JS vers le module Expo natif                                 |
-| `src/camera/web/`                | Stub web explicite                                                      |
-| `src/monitor/`                   | Commandes Moniteur ; ACK requis avant de déclarer une rec               |
-| `src/capabilities/`              | Validation des capacités et des combinaisons de qualité                 |
-| `src/design/`, `src/components/` | Tokens et composants UI minimaux                                        |
-| `modules/relais-camera-engine/`  | Binding Expo Modules, Swift, Kotlin, fixture commune                    |
-| `src/spikes/webrtc-preview/`     | Expérience jetable getUserMedia ; jamais importée par le produit        |
-| `scripts/`                       | Prebuild, builds, signaling LAN du spike et vérification des frontières |
-| `tests/`, `e2e/`                 | Invariants et protocoles device lab/testdroid                           |
+| Directory                        | Responsibility                                                            |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `app/`                           | Expo Router entry points; no direct sensor access                         |
+| `src/domain/`                    | JSON types and commands; no UI/native imports                             |
+| `src/session/`                   | Pure state machine and Zustand store                                      |
+| `src/signaling/`                 | Versioned QR descriptor, LAN validation and HTTP client                   |
+| `src/connections/`               | Remembered identities, secure storage, handshake and presence             |
+| `src/transport/`                 | Preview/DataChannel contract; no product JS capturer                      |
+| `src/camera/api.ts`              | Historical public remote-engine interface and events                      |
+| `src/camera/native/`             | JS adapter for the Expo native module                                     |
+| `src/camera/web/`                | Explicit web stub                                                         |
+| `src/monitor/`                   | Monitor commands; ACK required before showing recording                   |
+| `src/capabilities/`              | Capability validation and compatible quality selection                    |
+| `src/design/`, `src/components/` | Platform presentation and shared UI semantics                             |
+| `modules/relais-camera-engine/`  | Native capture, Expo bindings, gallery integration and historical fixture |
+| `src/spikes/webrtc-preview/`     | Disposable getUserMedia experiment; development-only                      |
+| `scripts/`                       | Build, prebuild, LAN signaling and boundary checks                        |
+| `tests/`, `e2e/`                 | Invariants and physical-device protocols                                  |
 
-## Propriété du capteur
+## Native presentation
 
-VisionCamera v5 est installée comme fondation native, mais aucune Camera View produit n'est montée à ce stade. Le futur module Relais doit étendre la session VisionCamera et ses outputs natifs ; il ne doit pas ouvrir sa propre session en parallèle. L'accès aux objets de session et à la VideoSource WebRTC reste à prouver par le prochain spike. Le scanner QR a un cycle court, terminé avant toute acquisition vidéo.
+SwiftUI and Jetpack Compose/Material 3 are exposed through Expo UI. Routes select platform-specific screens under `src/screens/`; `.ios.tsx`, `.android.tsx` and `.native.tsx` separate mobile implementations from web fallbacks. Native navigation is retained.
 
-`RelaisCameraEngine` expose `getCapabilities`, `configure`, `startPreview`, `stopPreview`, `startRecording`, `stopRecording`, et les événements `thermal`, `battery`, `droppedFrames`, `recordingStarted`, `error`. `stopRecording` devra résoudre avec le chemin local seulement après finalisation du fichier. Le stub renvoie des capacités fictives explicites et refuse les opérations de capture ; il ne crée aucun fichier.
+The iOS camera itself is a SwiftUI view hosted through Expo View. Home, buttons, selectors and sheets use platform controls. Icons share intentions while keeping SF Symbols or Material drawings. The viewfinder and essential controls stay fixed; settings scroll. No per-frame JS animation drives the camera surface.
 
-## Cycle de vie
+The historical remote-quality draft lives in `src/capabilities/selection.ts` and `useQualityModel`; it remains fixture-based. Real local settings configure AVFoundation/CameraX independently. See [native UI decisions](native-ui-ux.md).
 
-Session : `idle → pairing → connected → reconnecting → connected`, puis fermeture explicite. Le rôle est fixé au début de la session. Les états d'enregistrement `idle / starting / recording / stopping / failed` sont indépendants. Les commandes nécessiteront un identifiant, déduplication et ACK contenant l'état natif confirmé. Le Moniteur ne devient jamais « REC » sur un simple clic.
+## Camera ownership and files
 
-Une perte réseau conserve la rec locale. Le futur reconnect reprend l'état autoritaire Caméra avant de réactiver les commandes. La fermeture explicite d'une session enregistrant doit attendre un stop/finalize confirmé. Background Caméra non pris en charge en V1 ; tester les interruptions OS et remonter une erreur explicite.
+`AppleCameraModel` owns one AVFoundation session and `AVCaptureMovieFileOutput` on iOS. `LocalCamera.tsx` owns one VisionCamera v5 / CameraX session on Android. Direct AVFoundation replaced iOS VisionCamera to access public iOS 26 Cinematic capture. Never mount the QR scanner, spike camera and local camera simultaneously.
 
-## Fondation et limites
+Local profiles come from AVFoundation formats and CameraX Preview/VideoCapture compatibility checks, not Monitor fixtures. After native finalization, PhotoKit/MediaStore imports the file. Failed imports preserve its private copy. The reduced native WebRTC output remains the next integration step. [Native API decisions](research/native-camera-capabilities.md).
 
-Les écrans produit sont une maquette navigable : QR de démonstration, preview placeholder, Rec désactivé et réglages sur fixture. Le spike a sa propre session et son propre écran dev. Son serveur Node de signaling tourne sur un ordinateur du LAN, ne transporte aucun média, expire ses sessions et ne persiste rien. C'est une dérogation de spike : le produit devra héberger le signaling sur la Caméra pour fonctionner à deux téléphones seuls.
+The older `getCapabilities`, `configure`, `startPreview`, `stopPreview`, `startRecording`, `stopRecording` contract and `thermal`, `battery`, `droppedFrames`, `recordingStarted`, `error` events remain a remote-control stub. It returns explicitly fictional capabilities and rejects capture operations. It must never return a fake file or recording event.
 
-Aucune dette cachée en mode compatibilité : versions exactes, pas de désactivation de la New Architecture. Un bundle Metro ou un prebuild n'est pas une compilation Xcode/Gradle. Voir `STATUS.md` pour les preuves disponibles.
+## Lifecycles
+
+The target session progresses through `idle → pairing → connected → reconnecting → connected`, followed by explicit closure. Role is fixed per session. Recording states (`idle / starting / recording / stopping / failed`) are independent. Remote commands require identifiers, deduplication and ACKs with confirmed native state; a tap alone must not show REC.
+
+Network loss must not stop local recording. Reconnect must restore authoritative Camera state before enabling remote controls. Explicit closure during recording must await stop/finalization. Background camera operation is outside V1; interruptions must be surfaced and finalization attempted.
+
+## Current limitations
+
+Local capture is implemented, but remote product controls, demo pairing and web preview screens retain scaffolds. The development spike has its own capture session, screen and in-memory Node rendezvous server on a LAN computer. The server carries no media. Standalone two-phone operation requires native signaling on the Camera and separate hotspot validation.
+
+Do not hide compatibility debt by disabling New Architecture. Exact versions are locked. A Metro bundle or prebuild is not an Xcode/Gradle build. [STATUS.md](../STATUS.md) separates those proofs and records unresolved issues.

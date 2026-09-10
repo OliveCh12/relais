@@ -1,0 +1,121 @@
+import AVFoundation
+import SwiftUI
+
+struct AppleCameraPreview: UIViewRepresentable {
+  @ObservedObject var model: AppleCameraModel
+  let grid: Bool
+  @Binding var captureAngle: CGFloat
+
+  func makeUIView(context: Context) -> ApplePreviewSurface {
+    let view = ApplePreviewSurface()
+    view.model = model
+    view.preview.session = model.session
+    view.onCaptureAngle = { captureAngle = $0 }
+    return view
+  }
+
+  func updateUIView(_ view: ApplePreviewSurface, context: Context) {
+    view.grid.isHidden = !grid
+    view.connectRotation(model.activeDevice)
+    view.setNeedsLayout()
+  }
+}
+
+final class ApplePreviewSurface: UIView {
+  override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+  var preview: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+  weak var model: AppleCameraModel?
+  var onCaptureAngle: ((CGFloat) -> Void)?
+  let grid = CAShapeLayer()
+  private let focusRing = CAShapeLayer()
+  private var rotationCoordinator: Any?
+  private var rotationObservations: [NSKeyValueObservation] = []
+  private var deviceID: String?
+  private var initialZoom = 1.0
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    backgroundColor = .black
+    preview.videoGravity = .resizeAspect
+    grid.strokeColor = UIColor.white.withAlphaComponent(0.28).cgColor
+    grid.fillColor = UIColor.clear.cgColor
+    grid.lineWidth = 0.5
+    layer.addSublayer(grid)
+    focusRing.strokeColor = UIColor.systemYellow.cgColor
+    focusRing.fillColor = UIColor.clear.cgColor
+    focusRing.lineWidth = 1.5
+    focusRing.isHidden = true
+    layer.addSublayer(focusRing)
+    addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tap(_:))))
+    addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(hold(_:))))
+    addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:))))
+    isAccessibilityElement = true
+    accessibilityLabel = "Camera viewfinder"
+    accessibilityHint = "Tap a subject to focus. Touch and hold to lock focus and exposure. Pinch to zoom."
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let rect = preview.layerRectConverted(fromMetadataOutputRect: CGRect(x: 0, y: 0, width: 1, height: 1))
+    let path = UIBezierPath()
+    for fraction in [1.0 / 3.0, 2.0 / 3.0] {
+      let x = rect.minX + rect.width * fraction
+      let y = rect.minY + rect.height * fraction
+      path.move(to: CGPoint(x: x, y: rect.minY)); path.addLine(to: CGPoint(x: x, y: rect.maxY))
+      path.move(to: CGPoint(x: rect.minX, y: y)); path.addLine(to: CGPoint(x: rect.maxX, y: y))
+    }
+    grid.path = path.cgPath
+  }
+
+  func connectRotation(_ device: AVCaptureDevice?) {
+    guard let device else { return }
+    if device.uniqueID == deviceID {
+      if #available(iOS 17.0, *), let coordinator = rotationCoordinator as? AVCaptureDevice.RotationCoordinator {
+        let angle = coordinator.videoRotationAngleForHorizonLevelPreview
+        if preview.connection?.isVideoRotationAngleSupported(angle) == true { preview.connection?.videoRotationAngle = angle }
+      }
+      return
+    }
+    deviceID = device.uniqueID
+    if #available(iOS 17.0, *) {
+      let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: preview)
+      rotationCoordinator = coordinator
+      rotationObservations = [
+        coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]) { [weak self] coordinator, _ in
+          DispatchQueue.main.async {
+            guard let self else { return }
+            let angle = coordinator.videoRotationAngleForHorizonLevelPreview
+            if self.preview.connection?.isVideoRotationAngleSupported(angle) == true {
+              self.preview.connection?.videoRotationAngle = angle
+            }
+            self.setNeedsLayout()
+          }
+        },
+        coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak self] coordinator, _ in
+          DispatchQueue.main.async { self?.onCaptureAngle?(coordinator.videoRotationAngleForHorizonLevelCapture) }
+        }
+      ]
+    }
+    preview.connection?.automaticallyAdjustsVideoMirroring = false
+    if preview.connection?.isVideoMirroringSupported == true { preview.connection?.isVideoMirrored = device.position == .front }
+  }
+
+  @objc private func tap(_ recognizer: UITapGestureRecognizer) { focus(recognizer.location(in: self), locked: false) }
+  @objc private func hold(_ recognizer: UILongPressGestureRecognizer) {
+    if recognizer.state == .began { focus(recognizer.location(in: self), locked: true) }
+  }
+  private func focus(_ point: CGPoint, locked: Bool) {
+    guard model?.ready == true else { return }
+    model?.focus(at: preview.captureDevicePointConverted(fromLayerPoint: point), locked: locked)
+    focusRing.path = UIBezierPath(rect: CGRect(x: point.x - 32, y: point.y - 32, width: 64, height: 64)).cgPath
+    focusRing.isHidden = false
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.focusRing.isHidden = true }
+  }
+  @objc private func pinch(_ recognizer: UIPinchGestureRecognizer) {
+    guard let model, model.ready else { return }
+    if recognizer.state == .began { initialZoom = model.zoom }
+    model.setZoom(min(model.maxZoom, max(model.minZoom, initialZoom * recognizer.scale)))
+  }
+}

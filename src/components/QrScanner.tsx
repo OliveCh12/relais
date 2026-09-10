@@ -6,17 +6,17 @@ import { AppText, Button } from './ui';
 export function QrScanner({ onScan }: { onScan: (value: string) => void }) {
   const [permission, requestPermission] = useCameraPermissions();
   const scanned = useRef(false);
-  if (!permission) return <AppText>Vérification de la permission caméra…</AppText>;
+  if (!permission) return <AppText>Checking camera permission…</AppText>;
   if (!permission.granted)
     return (
       <>
-        <AppText variant="muted">Autorisez la caméra pour lire le QR de l’autre téléphone.</AppText>
+        <AppText variant="muted">
+          {permission.canAskAgain
+            ? 'Camera access lets you scan the QR code.'
+            : 'Allow camera access in your phone’s settings to scan the QR code.'}
+        </AppText>
         <Button
-          label={
-            permission.canAskAgain
-              ? 'Autoriser la caméra'
-              : 'Caméra refusée — ouvrir les réglages système'
-          }
+          label={permission.canAskAgain ? 'Allow camera access' : 'Open Settings'}
           onPress={() => {
             if (permission.canAskAgain) void requestPermission();
             else void Linking.openSettings();

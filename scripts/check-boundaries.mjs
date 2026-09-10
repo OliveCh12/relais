@@ -17,11 +17,14 @@ async function visit(directory) {
     function check(node) {
       if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
         const name = node.moduleSpecifier.text;
-        if (!spike && /spikes\//.test(name)) errors.push(`${path}: import spike dans le produit`);
-        if (!spike && /react-native-(webrtc|vision-camera)/.test(name))
-          errors.push(`${path}: accès direct caméra/transport natif`);
+        if (!spike && /spikes\//.test(name)) errors.push(`${path}: spike import in product code`);
+        const localCameraOwner =
+          path === 'modules/relais-camera-engine/src/LocalCamera.tsx' &&
+          name === 'react-native-vision-camera';
+        if (!spike && !localCameraOwner && /react-native-(webrtc|vision-camera)/.test(name))
+          errors.push(`${path}: direct native camera/transport access`);
         if (path.startsWith('src/domain/') && /react|expo|camera\/native/.test(name))
-          errors.push(`${path}: dépendance domaine interdite`);
+          errors.push(`${path}: forbidden domain dependency`);
       }
       if (
         ts.isCallExpression(node) &&
@@ -36,7 +39,8 @@ async function visit(directory) {
 }
 await visit('src');
 await visit('app');
+await visit('modules/relais-camera-engine/src');
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;
-} else console.log('Frontières caméra, domaine et spike : OK.');
+} else console.log('Camera, domain and spike boundaries: OK.');

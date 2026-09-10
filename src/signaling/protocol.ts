@@ -39,7 +39,7 @@ export function privateLanOrigin(value: string): string {
     !(a === 10 || (a === 172 && b !== undefined && b >= 16 && b <= 31) || (a === 192 && b === 168))
   )
     throw new Error(
-      'Utilisez une URL HTTP IPv4 privée du LAN, sans chemin (ex. http://192.168.1.10:8787).',
+      'Use a private LAN IPv4 HTTP URL without a path (e.g. http://192.168.1.10:8787).',
     );
   return url.origin;
 }
@@ -50,9 +50,9 @@ export const validToken = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-f0-9]{48}$/.test(value);
 
 export function parsePairingQr(text: string, now = Date.now()): PairingDescriptor {
-  if (text.length > 2048) throw new Error('QR trop volumineux.');
+  if (text.length > 2048) throw new Error('QR code is too large.');
   const data: unknown = JSON.parse(text);
-  if (typeof data !== 'object' || !data) throw new Error('QR invalide.');
+  if (typeof data !== 'object' || !data) throw new Error('Invalid QR code.');
   const value = data as Record<string, unknown>;
   if (
     value.kind !== 'relais-spike' ||
@@ -66,7 +66,7 @@ export function parsePairingQr(text: string, now = Date.now()): PairingDescripto
     value.expiresAt > now + SESSION_TTL_MS + 30_000
   )
     throw new Error(
-      'QR Relais invalide, expiré ou version incompatible. Vérifiez l’heure des téléphones.',
+      'Invalid or expired Relais QR code, or incompatible version. Check the time on both phones.',
     );
   return {
     kind: 'relais-spike',
@@ -82,7 +82,7 @@ export function parseDescription(
   value: unknown,
   type: SignalDescription['type'],
 ): SignalDescription {
-  if (typeof value !== 'object' || !value) throw new Error('SDP invalide.');
+  if (typeof value !== 'object' || !value) throw new Error('Invalid SDP.');
   const description = value as Record<string, unknown>;
   if (
     description.type !== type ||
@@ -90,6 +90,6 @@ export function parseDescription(
     !description.sdp.startsWith('v=0') ||
     description.sdp.length > MAX_SDP_BYTES
   )
-    throw new Error('SDP invalide.');
+    throw new Error('Invalid SDP.');
   return { type, sdp: description.sdp };
 }
