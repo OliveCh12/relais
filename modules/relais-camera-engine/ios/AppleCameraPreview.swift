@@ -27,7 +27,6 @@ final class ApplePreviewSurface: UIView {
   weak var model: AppleCameraModel?
   var onCaptureAngle: ((CGFloat) -> Void)?
   let grid = CAShapeLayer()
-  private let focusRing = CAShapeLayer()
   private var rotationCoordinator: Any?
   private var rotationObservations: [NSKeyValueObservation] = []
   private var deviceID: String?
@@ -41,23 +40,27 @@ final class ApplePreviewSurface: UIView {
     grid.fillColor = UIColor.clear.cgColor
     grid.lineWidth = 0.5
     layer.addSublayer(grid)
-    focusRing.strokeColor = UIColor.systemYellow.cgColor
-    focusRing.fillColor = UIColor.clear.cgColor
-    focusRing.lineWidth = 1.5
-    focusRing.isHidden = true
-    layer.addSublayer(focusRing)
-    addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tap(_:))))
-    addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(hold(_:))))
     addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:))))
     isAccessibilityElement = true
     accessibilityLabel = "Camera viewfinder"
-    accessibilityHint = "Tap a subject to focus. Touch and hold to lock focus and exposure. Pinch to zoom."
+    accessibilityHint = "Focus and exposure adjust automatically. Pinch to zoom."
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    if #unavailable(iOS 17.0), let orientation = window?.windowScene?.interfaceOrientation {
+      let angle: CGFloat
+      switch orientation {
+      case .landscapeRight: angle = 0
+      case .landscapeLeft: angle = 180
+      case .portraitUpsideDown: angle = 270
+      default: angle = 90
+      }
+      preview.connection?.videoOrientation = AppleCameraModel.videoOrientation(angle)
+      DispatchQueue.main.async { [weak self] in self?.onCaptureAngle?(angle) }
+    }
     let rect = preview.layerRectConverted(fromMetadataOutputRect: CGRect(x: 0, y: 0, width: 1, height: 1))
     let path = UIBezierPath()
     for fraction in [1.0 / 3.0, 2.0 / 3.0] {
@@ -102,17 +105,6 @@ final class ApplePreviewSurface: UIView {
     if preview.connection?.isVideoMirroringSupported == true { preview.connection?.isVideoMirrored = device.position == .front }
   }
 
-  @objc private func tap(_ recognizer: UITapGestureRecognizer) { focus(recognizer.location(in: self), locked: false) }
-  @objc private func hold(_ recognizer: UILongPressGestureRecognizer) {
-    if recognizer.state == .began { focus(recognizer.location(in: self), locked: true) }
-  }
-  private func focus(_ point: CGPoint, locked: Bool) {
-    guard model?.ready == true else { return }
-    model?.focus(at: preview.captureDevicePointConverted(fromLayerPoint: point), locked: locked)
-    focusRing.path = UIBezierPath(rect: CGRect(x: point.x - 32, y: point.y - 32, width: 64, height: 64)).cgPath
-    focusRing.isHidden = false
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.focusRing.isHidden = true }
-  }
   @objc private func pinch(_ recognizer: UIPinchGestureRecognizer) {
     guard let model, model.ready else { return }
     if recognizer.state == .began { initialZoom = model.zoom }

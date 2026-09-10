@@ -1,6 +1,20 @@
 # Project status — September 10, 2026
 
-**Native local capture and native mobile UI are implemented. Recording and remote preview remain separate flows.** On an iPhone 17 Pro, Video and Apple's Cinematic mode both opened at 4K HDR30. The hardware catalog exposed 4K120 profiles; that recording rate has not been validated. Complete recording, audio, orientation and gallery checks remain physical-device work.
+**Camera and Monitor now share a product flow for photos, native video recording and remote shutter/start/stop.** Native focus, exposure and color are automatic. The local writer is independent of the reduced native WebRTC preview. The Mac rendezvous and physical-device validation remain required.
+
+## Photo and remote capture integration
+
+- Replaced the Monitor's development-spike route with product controls, native connection sheets and saved-camera discovery. A single available saved camera reconnects automatically. First pairing still uses the secure-store handshake and a QR/pasted code.
+- Added native photo output and PhotoKit/MediaStore import, Photo/Video selectors and authoritative remote state. Cinematic remains an iOS hardware-dependent mode. Removed manual focus, exposure and depth controls. Home and unavailable-camera states use clearer native navigation and smaller standard controls.
+- iOS streams from the same AVFoundation session. Android extends the existing CameraX owner with a native ImageAnalysis output. Frames stay native. Closing Monitor or releasing the peer track does not stop local recording.
+- `pnpm check` passed with 30 tests, strict TypeScript, ESLint, architecture boundaries and formatting. Four focused command tests cover pairing requirements, payload validation, duplicate capture prevention, expired sequence rejection and native errors. Production exports for iOS, Android and web passed.
+- Android ARM64 `assembleDebug` passed (603 tasks), and the final APK was installed and opened on the emulator. Native Photo mode reported ready; a capture completed with a gallery-save confirmation and a JPEG in `Pictures/Relais`. This proves the emulator photo path, not physical-sensor quality.
+- The final ARM64 iOS Simulator build passed and was installed. Its Monitor paired with the final Android emulator Camera, triggered a photo, changed to Video, started and stopped one recording, and received both gallery-save confirmations. New JPEG and MP4 originals were present in Android's gallery folders. Native receive statistics showed 881 decoded frames at 640 × 480 in Photo and 3,098 accumulated decoded frames during Video; sampled receive rates were 25 and 18 fps under concurrent native builds. These are emulator functional results, not phone performance targets.
+- During an earlier installation of this integration on the physical iPhone, Monitor automatically reconnected and received the Camera's authoritative state for a 4K HDR30 recording already in progress. The take was left uninterrupted. Remote shutter/start/stop and gallery finalization on the physical iPhone have not yet been verified for this integration.
+- Physical Android, sustained preview/recording, network interruptions and detailed visual QA remain owner checks. The existing O20 Android startup crash is not considered fixed. The original native files remain independent of the connection.
+- [Implementation and public API sources](docs/research/native-remote-capture.md). The dated sections below describe earlier states and must not be treated as the current feature list.
+
+## Historical evidence
 
 ## Native lifecycle hardening
 
@@ -104,9 +118,9 @@ An earlier iPhone → Simulator sample received H.264 1280 × 720 at 30 fps, wit
 - Metro resolves Worklets, Reanimated and Nitro through root dependencies. This avoids the previous JS 0.10.1/0.12.2 Worklets duplication against the 0.10.1 native binary (`valueUnpacker not found`).
 - Exact versions and the lockfile are retained. CameraX and Material alpha versions, WebRTC New Architecture compatibility and target-SDK permission changes still require device validation.
 
-## Next camera milestone
+## Earlier camera milestone plan
 
-Connect the existing native recording owner to a reduced WebRTC VideoSource: initially 720p30 SDR/H.264, audio off. Preserve native capture timestamps, buffer ownership and rotation. Android must close every ImageProxy; no frames cross JS. Backpressure should sacrifice preview before recording.
+The native-owner-to-WebRTC integration described at the top of this document now implements this milestone's capture path. Its reduced preview preserves native timestamps, buffer ownership and rotation, with audio off. Android closes each ImageProxy; no frames cross JS. Physical-device performance evidence is still required.
 
 Validate one camera open, no leaks during 20 minutes, both physical iPhone/Android directions, 20 recording start/stop cycles and a five-second network interruption with an intact file. Keep local recording independent from transport throughout.
 

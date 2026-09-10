@@ -10,7 +10,9 @@ Pod::Spec.new do |s|
   s.source = { :git => '' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
+  s.dependency 'react-native-webrtc'
   s.swift_version = '5.9'
-  s.source_files = 'ios/**/*.swift'
+  s.source_files = 'ios/**/*.{swift,h,m}'
+  s.public_header_files = 'ios/RelaisPreviewSource.h'
   s.resource_bundles = { 'RelaisCameraEngineResources' => ['fixtures/capabilities.json'] }
 end

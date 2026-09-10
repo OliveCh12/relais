@@ -5,8 +5,17 @@ public final class RelaisCameraEngineModule: Module {
   public func definition() -> ModuleDefinition {
     Name("RelaisCameraEngine")
     View(AppleCameraView.self) {
-      Events("onClose")
+      Events("onClose", "onConnect", "onMonitor", "onCameraState")
+      Prop("connectionLabel") { (view: AppleCameraView, label: String) in view.model.connectionLabel = label }
     }
+    AsyncFunction("captureAction") { (action: String) throws -> [String: Any] in
+      guard let view = AppleCameraView.current else { throw CaptureFailure("Open Camera on the other phone first.") }
+      try view.model.perform(action)
+      return view.model.captureState
+    }.runOnQueue(.main)
+    AsyncFunction("getCaptureState") { () -> [String: Any] in
+      AppleCameraView.current?.model.captureState ?? ["ready": false]
+    }.runOnQueue(.main)
     #if DEBUG
     AsyncFunction("cameraDebug") { (action: String) throws -> [String: Any] in
       guard let view = AppleCameraView.current else { return ["mounted": false] }
@@ -15,7 +24,7 @@ public final class RelaisCameraEngineModule: Module {
     #endif
     AsyncFunction("getPendingRecordings") { () -> [String] in
       let files = try FileManager.default.contentsOfDirectory(at: RecordingLibrary.directory(), includingPropertiesForKeys: [.fileSizeKey])
-      return files.filter { ["mov", "mp4"].contains($0.pathExtension) && ((try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) > 0 }.map(\.path).sorted()
+      return files.filter { ["mov", "mp4", "jpg", "heic"].contains($0.pathExtension) && ((try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) > 0 }.map(\.path).sorted()
     }
     AsyncFunction("createRecordingPath") { () -> String in
       try RecordingLibrary.createPath()

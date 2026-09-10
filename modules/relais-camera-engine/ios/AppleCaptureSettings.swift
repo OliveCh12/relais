@@ -1,6 +1,7 @@
 import AVFoundation
 
 struct AppleCaptureSettings: Equatable {
+  var photo = true
   var front = false
   var cinematic = false
   var height: Int32 = 2160

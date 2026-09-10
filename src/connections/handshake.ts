@@ -7,6 +7,9 @@ export class DeviceHandshake {
   private peer: DeviceIdentity | null = null;
   private pending: SavedDevice | null = null;
   private paired = false;
+  get isPaired() {
+    return this.paired && !this.closed;
+  }
   private processing = Promise.resolve();
   constructor(
     private options: {

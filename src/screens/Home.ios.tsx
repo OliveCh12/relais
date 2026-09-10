@@ -1,4 +1,5 @@
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { Stack } from 'expo-router';
 import { Button, Form, Host, HStack, Image, Section, Text, VStack } from '@expo/ui/swift-ui';
 import {
   accessibilityHidden,
@@ -19,73 +20,66 @@ export default function HomeScreen() {
   const chooseRole = useChooseRole();
   const theme = useAppTheme();
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <Host style={{ flex: 1 }} ignoreSafeArea="container">
-        <VStack spacing={12}>
-          <VStack
-            alignment="leading"
-            spacing={12}
-            modifiers={[
-              padding({ horizontal: 24, top: 28 }),
-              frame({ maxWidth: Infinity, alignment: 'leading' }),
-            ]}
-          >
-            <HStack spacing={10}>
-              <NativeIcon name="wifi" size={24} color={theme.accent} />
-              <Text modifiers={[font({ textStyle: 'title2', weight: 'semibold' })]}>Relais</Text>
-            </HStack>
-            <Text modifiers={[font({ textStyle: 'body' }), foregroundStyle(theme.muted)]}>
-              How would you like to use this phone?
-            </Text>
-          </VStack>
-          <Form>
-            <Section>
-              {roles.map((role) => (
-                <Button
-                  key={role.id}
-                  onPress={() => chooseRole(role.id)}
-                  modifiers={[buttonStyle('plain'), accessibilityIdentifier(`choose-${role.id}`)]}
-                >
-                  <HStack spacing={16} modifiers={[padding({ vertical: 12 })]}>
-                    <NativeIcon name={role.id} size={28} color={theme.accent} />
-                    <VStack
-                      alignment="leading"
-                      spacing={4}
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Relais',
+          headerLargeTitle: true,
+          headerStyle: { backgroundColor: theme.background },
+        }}
+      />
+      <Host style={{ flex: 1 }}>
+        <Form>
+          <Section title="Use this phone as">
+            {roles.map((role) => (
+              <Button
+                key={role.id}
+                onPress={() => chooseRole(role.id)}
+                modifiers={[buttonStyle('plain'), accessibilityIdentifier(`choose-${role.id}`)]}
+              >
+                <HStack spacing={16} modifiers={[padding({ vertical: 4 })]}>
+                  <NativeIcon name={role.id} size={24} color={theme.accent} />
+                  <VStack
+                    alignment="leading"
+                    spacing={4}
+                    modifiers={[
+                      frame({ maxWidth: Infinity, alignment: 'leading' }),
+                      multilineTextAlignment('leading'),
+                    ]}
+                  >
+                    <Text
                       modifiers={[
-                        frame({ maxWidth: Infinity, alignment: 'leading' }),
-                        multilineTextAlignment('leading'),
+                        font({ textStyle: 'body', weight: 'semibold' }),
+                        foregroundStyle(theme.text),
                       ]}
                     >
-                      <Text
-                        modifiers={[font({ textStyle: 'headline' }), foregroundStyle(theme.text)]}
-                      >
-                        {role.title}
-                      </Text>
-                      <Text
-                        modifiers={[
-                          font({ textStyle: 'subheadline' }),
-                          foregroundStyle(theme.muted),
-                          fixedSize({ horizontal: false, vertical: true }),
-                        ]}
-                      >
-                        {role.description}
-                      </Text>
-                    </VStack>
-                    <Image
-                      systemName="chevron.right"
-                      size={12}
-                      modifiers={[foregroundStyle(theme.muted), accessibilityHidden(true)]}
-                    />
-                  </HStack>
-                </Button>
-              ))}
-            </Section>
-            <Section footer={<Text>Find your saved devices in Monitor.</Text>}>
-              <Button label="About this version" systemImage="info.circle" onPress={showAbout} />
-            </Section>
-          </Form>
-        </VStack>
+                      {role.title}
+                    </Text>
+                    <Text
+                      modifiers={[
+                        font({ textStyle: 'subheadline' }),
+                        foregroundStyle(theme.muted),
+                        fixedSize({ horizontal: false, vertical: true }),
+                      ]}
+                    >
+                      {role.description}
+                    </Text>
+                  </VStack>
+                  <Image
+                    systemName="chevron.right"
+                    size={12}
+                    modifiers={[foregroundStyle(theme.muted), accessibilityHidden(true)]}
+                  />
+                </HStack>
+              </Button>
+            ))}
+          </Section>
+          <Section footer={<Text>Photos and videos stay on the camera phone.</Text>}>
+            <Button label="About Relais" systemImage="info.circle" onPress={showAbout} />
+          </Section>
+        </Form>
       </Host>
-    </SafeAreaView>
+    </View>
   );
 }

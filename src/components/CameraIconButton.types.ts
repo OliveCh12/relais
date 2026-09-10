@@ -7,4 +7,5 @@ export interface CameraIconButtonProps {
   disabled?: boolean;
   selected?: boolean;
   large?: boolean;
+  photo?: boolean;
 }

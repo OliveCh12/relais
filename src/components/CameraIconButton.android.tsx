@@ -10,16 +10,19 @@ export function CameraIconButton({
   disabled = false,
   selected,
   large,
+  photo,
 }: CameraIconButtonProps) {
-  const dimension = large ? 88 : 48;
+  const dimension = large ? 84 : 48;
   return (
     <Host colorScheme="dark" style={{ width: dimension, height: dimension }}>
       <IconButton onClick={onPress} enabled={!disabled} modifiers={[size(dimension, dimension)]}>
         <NativeIcon
           name={icon}
           label={label}
-          size={large ? 76 : 24}
-          color={disabled ? '#66666B' : large ? '#FF5449' : selected ? '#FFD60A' : '#FFFFFF'}
+          size={large ? 72 : 24}
+          color={
+            disabled ? '#66666B' : large && !photo ? '#FF5449' : selected ? '#FFD60A' : '#FFFFFF'
+          }
         />
       </IconButton>
     </Host>

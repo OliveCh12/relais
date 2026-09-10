@@ -2,7 +2,7 @@ import type { ExpoConfig } from 'expo/config';
 
 const appleTeamId = process.env.RELAIS_APPLE_TEAM_ID;
 const cameraPermission =
-  'Relais uses the camera to scan QR codes, record video and share a local live preview.';
+  'Relais uses the camera to scan QR codes, take photos, record videos and share a local live preview.';
 const microphonePermission =
   'Relais uses this phone’s microphone to record audio in the local video file.';
 
@@ -23,7 +23,7 @@ const config: ExpoConfig = {
       EXDevMenuShowFloatingActionButton: false,
       NSCameraUsageDescription: cameraPermission,
       NSMicrophoneUsageDescription: microphonePermission,
-      NSPhotoLibraryAddUsageDescription: 'Relais adds the videos you record to Photos.',
+      NSPhotoLibraryAddUsageDescription: 'Relais adds the photos and videos you capture to Photos.',
       NSLocalNetworkUsageDescription:
         'Relais connects your two phones over Wi-Fi without sending video over the internet.',
       NSAppTransportSecurity: { NSAllowsLocalNetworking: true },

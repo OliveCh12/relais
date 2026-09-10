@@ -6,6 +6,15 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   let session = AVCaptureSession()
   private let queue = DispatchQueue(label: "app.relais.capture", qos: .userInitiated)
   private let movie = AVCaptureMovieFileOutput()
+  private let photo = AVCapturePhotoOutput()
+  private let previewOutput = AVCaptureVideoDataOutput()
+  private let previewQueue = DispatchQueue(label: "app.relais.preview", qos: .userInitiated)
+  private var photoCapture: ApplePhotoCapture?
+  var captureAngle: CGFloat = 90
+  var onConnect: (() -> Void)?
+  @Published var connectionLabel = "Connect"
+  @Published private(set) var photoQuality = "Photo"
+  @Published private(set) var canShare = false
   private var input: AVCaptureDeviceInput?
   private var metadata: AVCaptureMetadataOutput?
   private var observers: [NSObjectProtocol] = []
@@ -32,17 +41,10 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   @Published private(set) var message = ""
   @Published private(set) var lowLight = false
   @Published private(set) var cinematicSupported = false
-  @Published private(set) var torchAvailable = false
-  @Published private(set) var torch = false
   @Published private(set) var zoom = 1.0
   @Published private(set) var zoomStops: [Double] = []
   @Published private(set) var minZoom = 1.0
   @Published private(set) var maxZoom = 1.0
-  @Published private(set) var exposure = 0.0
-  @Published private(set) var exposureRange = -2.0...2.0
-  @Published private(set) var aperture = 4.0
-  @Published private(set) var apertureRange = 2.0...16.0
-  @Published private(set) var focusLocked = false
   @Published private(set) var pending: [String] = []
   @Published private(set) var stabilizationActive = false
   @Published private(set) var stabilizationSupported = false
@@ -164,6 +166,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
         DispatchQueue.main.async {
           guard self.generation == request, self.visible, !self.closing else { return }
           self.configuring = false
+          self.canShare = false
           self.activeDevice = nil
           self.profiles = []
           self.stabilizationSupported = false
@@ -185,17 +188,25 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       return (device, profiles, profile)
     }
     // Prefer the virtual camera for seamless lens transitions, but allow a physical camera for a higher cadence.
-    let chosen = possible.first(where: { $0.2.height == requested.height && $0.2.fps == requested.fps && $0.2.hdr == requested.hdr })
+    var chosen = possible.first(where: { $0.2.height == requested.height && $0.2.fps == requested.fps && $0.2.hdr == requested.hdr })
       ?? possible.first(where: { $0.2.height == requested.height && $0.2.fps == requested.fps })
       ?? possible.first
+    if requested.photo {
+      chosen = candidates.compactMap { device -> (AVCaptureDevice, [AppleCaptureProfile], AppleCaptureProfile)? in
+        guard let profile = AppleCaptureCatalog.photoProfile(for: device) else { return nil }
+        return (device, [], profile)
+      }.first
+    }
     guard let (device, _, profile) = chosen else {
       throw CaptureFailure(requested.cinematic ? "Cinematic mode is unavailable on this camera." : "No camera available. Use a physical iPhone to record.")
     }
     let allProfiles = possible.flatMap { $0.1 }
     var selected = requested
-    selected.height = profile.height
-    selected.fps = profile.fps
-    selected.hdr = profile.hdr
+    if !requested.photo {
+      selected.height = profile.height
+      selected.fps = profile.fps
+      selected.hdr = profile.hdr
+    }
     selected.audio = requested.audio && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
 
     session.beginConfiguration()
@@ -210,7 +221,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     guard session.canAddInput(videoInput) else { throw CaptureFailure("This camera is unavailable.") }
     session.addInput(videoInput)
     input = videoInput
-    if selected.audio, let mic = AVCaptureDevice.default(for: .audio) {
+    if !selected.photo, selected.audio, let mic = AVCaptureDevice.default(for: .audio) {
       let audioInput = try AVCaptureDeviceInput(device: mic)
       guard session.canAddInput(audioInput) else { throw CaptureFailure("The microphone is unavailable.") }
       session.addInput(audioInput)
@@ -220,7 +231,8 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
     try device.lockForConfiguration()
     device.activeFormat = profile.format
-    device.activeColorSpace = profile.hdr ? .HLG_BT2020 : .sRGB
+    device.activeColorSpace = selected.photo && profile.format.supportedColorSpaces.contains(.P3_D65)
+      ? .P3_D65 : profile.hdr ? .HLG_BT2020 : .sRGB
     device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: Int32(profile.fps))
     device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: Int32(profile.fps))
     if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
@@ -236,6 +248,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       videoInput.isCinematicVideoCaptureEnabled = true
       videoInput.simulatedAperture = profile.format.defaultSimulatedAperture
     }
+    if !selected.photo {
     guard session.canAddOutput(movie) else { throw CaptureFailure("Recording is unavailable with these settings.") }
     session.addOutput(movie)
     if #available(iOS 26.0, *), selected.cinematic {
@@ -258,6 +271,23 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     let codec: AVVideoCodecType = movie.availableVideoCodecTypes.contains(.hevc) ? .hevc : .h264
     guard !selected.hdr || codec == .hevc else { throw CaptureFailure("HDR requires the HEVC encoder on this camera.") }
     movie.setOutputSettings([AVVideoCodecKey: codec], for: connection)
+    } else {
+      guard session.canAddOutput(photo) else { throw CaptureFailure("Photo capture is unavailable on this camera.") }
+      session.addOutput(photo)
+      photo.maxPhotoQualityPrioritization = .quality
+      if let dimensions = profile.format.supportedMaxPhotoDimensions.max(by: {
+        Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height)
+      }) { photo.maxPhotoDimensions = dimensions }
+    }
+    previewOutput.alwaysDiscardsLateVideoFrames = true
+    previewOutput.setSampleBufferDelegate(RelaisPreviewSource.shared(), queue: previewQueue)
+    previewOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange]
+    if #available(iOS 17.0, *) {
+      previewOutput.automaticallyConfiguresOutputBufferDimensions = false
+      previewOutput.deliversPreviewSizedOutputBuffers = true
+    }
+    let shareable = session.canAddOutput(previewOutput)
+    if shareable { session.addOutput(previewOutput) }
     session.commitConfiguration()
     committed = true
     captureSettings = selected
@@ -282,22 +312,21 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       }
     }
     let running = session.isRunning && !session.isInterrupted
-    let stable = connection.activeVideoStabilizationMode != .off
-    let supportsStabilization = connection.isVideoStabilizationSupported
+    let connection = movie.connection(with: .video)
+    let stable = connection.map { $0.activeVideoStabilizationMode != .off } ?? false
+    let supportsStabilization = connection?.isVideoStabilizationSupported ?? false
+    let megapixels = Int((Double(photo.maxPhotoDimensions.width) * Double(photo.maxPhotoDimensions.height) / 1_000_000).rounded())
     let displayZoom = device.videoZoomFactor * multiplier
     DispatchQueue.main.async {
       guard self.generation == request, self.visible, !self.closing else { return }
+      self.canShare = shareable
+      self.photoQuality = megapixels > 0 ? "\(megapixels) MP" : "Photo"
       self.settings = selected
       self.activeDevice = device
       self.profiles = allProfiles
       self.cinematicSupported = cinematicSupported
       self.configuring = false
       self.ready = running && self.canUseCamera
-      self.torchAvailable = device.hasTorch
-      self.torch = false
-      self.focusLocked = false
-      self.exposure = 0
-      self.exposureRange = Double(device.minExposureTargetBias)...Double(device.maxExposureTargetBias)
       self.minZoom = lower
       self.maxZoom = upper
       self.zoomStops = Array(Set(zoomStops)).sorted()
@@ -305,47 +334,8 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       self.stabilizationActive = stable
       self.stabilizationSupported = supportsStabilization
       if !selected.cinematic { self.lowLight = false }
-      if #available(iOS 26.0, *), selected.cinematic {
-        self.aperture = Double(profile.format.defaultSimulatedAperture)
-        self.apertureRange = Double(profile.format.minSimulatedAperture)...Double(profile.format.maxSimulatedAperture)
-      }
       if selected.height != requested.height || selected.fps != requested.fps || selected.hdr != requested.hdr {
         self.message = "Adjusted settings: \(AppleCaptureCatalog.label(selected.height)) · \(selected.fps) fps\(selected.hdr ? " · HDR" : "")."
-      }
-    }
-  }
-
-  func setTorch() {
-    queue.async {
-      guard let device = self.input?.device, device.hasTorch else { return }
-      do {
-        try device.lockForConfiguration()
-        let enabled = device.torchMode != .on
-        device.torchMode = enabled ? .on : .off
-        device.unlockForConfiguration()
-        DispatchQueue.main.async { self.torch = enabled }
-      } catch { self.report(error) }
-    }
-  }
-
-  func setExposure(_ value: Double) {
-    exposure = value
-    queue.async {
-      guard let device = self.input?.device else { return }
-      do {
-        try device.lockForConfiguration()
-        device.setExposureTargetBias(min(device.maxExposureTargetBias, max(device.minExposureTargetBias, Float(value))))
-        device.unlockForConfiguration()
-      } catch { self.report(error) }
-    }
-  }
-
-  func setAperture(_ value: Double) {
-    guard !busy else { return }
-    aperture = value
-    queue.async {
-      if #available(iOS 26.0, *), let input = self.input, input.isCinematicVideoCaptureEnabled {
-        input.simulatedAperture = min(input.device.activeFormat.maxSimulatedAperture, max(input.device.activeFormat.minSimulatedAperture, Float(value)))
       }
     }
   }
@@ -369,32 +359,92 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     return device.deviceType == .builtInTripleCamera || device.deviceType == .builtInDualWideCamera ? 0.5 : 1
   }
 
-  func focus(at point: CGPoint, locked: Bool) {
-    queue.async {
-      guard let device = self.input?.device else { return }
-      do {
-        try device.lockForConfiguration()
-        defer { device.unlockForConfiguration() }
-        if #available(iOS 26.0, *), self.captureSettings.cinematic {
-          if locked { device.setCinematicVideoFixedFocus(at: point, focusMode: .strong) }
-          else { device.setCinematicVideoTrackingFocus(at: point, focusMode: .weak) }
-        } else {
-          if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = point }
-          let focus: AVCaptureDevice.FocusMode = locked ? .autoFocus : .continuousAutoFocus
-          if device.isFocusModeSupported(focus) { device.focusMode = focus }
-          if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = point }
-          let exposure: AVCaptureDevice.ExposureMode = locked ? .autoExpose : .continuousAutoExposure
-          if device.isExposureModeSupported(exposure) { device.exposureMode = exposure }
-        }
-        DispatchQueue.main.async { self.focusLocked = locked }
-      } catch { self.report(error) }
+  var captureState: [String: Any] {
+    ["mode": settings.photo ? "photo" : settings.cinematic ? "cinematic" : "video",
+     "modes": cinematicSupported ? ["photo", "video", "cinematic"] : ["photo", "video"],
+     "phase": phase, "ready": ready && !configuring, "canShare": canShare,
+     "canCapture": canUseCamera && ready && !busy && !configuring && phase != "pending",
+     "quality": settings.photo ? photoQuality : "\(AppleCaptureCatalog.label(settings.height)) · \(settings.fps) fps\(settings.hdr ? " · HDR" : "")",
+     "message": message, "startedAt": startedAt.map { $0.timeIntervalSince1970 * 1000 } ?? 0]
+  }
+
+  func perform(_ action: String) throws {
+    guard canUseCamera else { throw CaptureFailure("Keep Camera open on the other phone.") }
+    if action == "stop" { stopRecording(); return }
+    guard ready, !busy, !configuring, phase != "pending" else { throw CaptureFailure("Wait for the camera to be ready.") }
+    switch action {
+    case "photo":
+      guard settings.photo else { throw CaptureFailure("Switch to Photo first.") }
+      takePhoto()
+    case "start":
+      guard !settings.photo else { throw CaptureFailure("Switch to Video first.") }
+      record(rotation: captureAngle)
+    case "mode-photo": change { $0.photo = true; $0.cinematic = false }
+    case "mode-video": change { $0.photo = false; $0.cinematic = false }
+    case "mode-cinematic":
+      guard cinematicSupported else { throw CaptureFailure("Cinematic mode is unavailable on this camera.") }
+      change { $0.photo = false; $0.cinematic = true }
+    default: throw CaptureFailure("Unknown camera action.")
     }
   }
 
-  func resetFocus() { focus(at: CGPoint(x: 0.5, y: 0.5), locked: false) }
+  func takePhoto() {
+    guard canUseCamera, ready, !busy, !configuring, phase != "pending", settings.photo else { return }
+    phase = "capturing"
+    message = ""
+    let angle = captureAngle
+    queue.async {
+      guard self.session.isRunning, !self.session.isInterrupted else {
+        DispatchQueue.main.async { self.phase = "error"; self.message = "Camera interrupted. Try again."; self.endBackgroundTask(); self.completeClose() }
+        return
+      }
+      if let connection = self.photo.connection(with: .video) {
+        if #available(iOS 17.0, *), connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
+        else { connection.videoOrientation = Self.videoOrientation(angle) }
+      }
+      let heic = self.photo.availablePhotoCodecTypes.contains(.hevc)
+      let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: heic ? AVVideoCodecType.hevc : .jpeg])
+      settings.maxPhotoDimensions = self.photo.maxPhotoDimensions
+      settings.photoQualityPrioritization = .quality
+      if self.photo.supportedFlashModes.contains(.auto) { settings.flashMode = .auto }
+      self.finishing = true
+      let capture = ApplePhotoCapture { data, error in
+        self.queue.async {
+          self.finishing = false
+          self.photoCapture = nil
+          if self.backgrounded { self.session.stopRunning() }
+          do {
+            if let error { throw error }
+            guard let data else { throw CaptureFailure("The photo could not be captured. Try again.") }
+            let url = try RecordingLibrary.directory().appendingPathComponent("Relais-\(UUID().uuidString).\(heic ? "heic" : "jpg")")
+            try data.write(to: url, options: .atomic)
+            Task { @MainActor in self.phase = "saving"; await self.save([url.path]) }
+          } catch {
+            DispatchQueue.main.async {
+              self.phase = "error"
+              self.message = error.localizedDescription
+              self.endBackgroundTask()
+              self.completeClose()
+            }
+          }
+        }
+      }
+      self.photoCapture = capture
+      self.photo.capturePhoto(with: settings, delegate: capture)
+    }
+  }
+
+  static func videoOrientation(_ angle: CGFloat) -> AVCaptureVideoOrientation {
+    switch (Int((angle / 90).rounded()) % 4 + 4) % 4 {
+    case 0: return .landscapeRight
+    case 2: return .landscapeLeft
+    case 3: return .portraitUpsideDown
+    default: return .portrait
+    }
+  }
 
   func record(rotation: CGFloat) {
-    guard canUseCamera, ready, !busy, !configuring else { return }
+    guard canUseCamera, ready, !busy, !configuring, phase != "pending", !settings.photo else { return }
     phase = "starting"
     message = ""
     queue.async {
@@ -405,6 +455,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
         guard self.session.isRunning, !self.session.isInterrupted else { throw CaptureFailure("The camera was interrupted.") }
         if let connection = self.movie.connection(with: .video) {
           if #available(iOS 17.0, *), connection.isVideoRotationAngleSupported(rotation) { connection.videoRotationAngle = rotation }
+          else { connection.videoOrientation = Self.videoOrientation(rotation) }
         }
         self.stopAfterStart = false
         self.finishing = true
@@ -472,7 +523,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     do {
       for path in paths { _ = try await RecordingLibrary.save(path: path) }
       phase = "saved"
-      message = "Video added to Photos."
+      message = "Saved to Photos."
     } catch {
       phase = "pending"
       message = error.localizedDescription
@@ -503,7 +554,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   private func refreshPending() {
     queue.async {
       let files = (try? FileManager.default.contentsOfDirectory(at: RecordingLibrary.directory(), includingPropertiesForKeys: [.fileSizeKey])) ?? []
-      let paths = files.filter { $0.pathExtension == "mov" && ((try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) > 0 }.map(\.path)
+      let paths = files.filter { ["mov", "mp4", "jpg", "heic"].contains($0.pathExtension) && ((try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) > 0 }.map(\.path)
       DispatchQueue.main.async { self.pending = paths }
     }
   }

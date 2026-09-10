@@ -1,10 +1,10 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 import {
   Column,
   ListItem,
   Host,
   Icon,
-  Row,
   Text,
   TextButton,
   useMaterialColors,
@@ -26,22 +26,20 @@ export default function HomeScreen() {
   const theme = useAppTheme();
   const colors = useMaterialColors();
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: theme.background }}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Relais',
+          headerStyle: { backgroundColor: theme.background },
+        }}
+      />
       <Host style={{ flex: 1 }}>
         <Column
           modifiers={[fillMaxSize(), verticalScroll(), padding(24, 28, 24, 24)]}
-          verticalArrangement={{ spacedBy: 36 }}
+          verticalArrangement={{ spacedBy: 24 }}
         >
-          <Row horizontalArrangement={{ spacedBy: 10 }} verticalAlignment="center">
-            <NativeIcon name="wifi" size={24} color={colors.primary} />
-            <Text style={{ typography: 'headlineSmall' }}>Relais</Text>
-          </Row>
-          <Column verticalArrangement={{ spacedBy: 8 }}>
-            <Text style={{ typography: 'titleLarge' }}>How would you like to use this phone?</Text>
-            <Text color={colors.onSurfaceVariant} style={{ typography: 'bodyMedium' }}>
-              Choose how to use this phone.
-            </Text>
-          </Column>
+          <Text style={{ typography: 'titleMedium' }}>Use this phone as</Text>
           <Column verticalArrangement={{ spacedBy: 12 }}>
             {roles.map((role) => (
               <ListItem
@@ -49,7 +47,7 @@ export default function HomeScreen() {
                 modifiers={[clickable(() => chooseRole(role.id)), testID(`choose-${role.id}`)]}
               >
                 <ListItem.LeadingContent>
-                  <NativeIcon name={role.id} size={28} color={colors.primary} />
+                  <NativeIcon name={role.id} size={24} color={colors.primary} />
                 </ListItem.LeadingContent>
                 <ListItem.HeadlineContent>
                   <Text>{role.title}</Text>
@@ -64,13 +62,13 @@ export default function HomeScreen() {
             ))}
           </Column>
           <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
-            Find your saved devices in Monitor.
+            Photos and videos stay on the camera phone.
           </Text>
           <TextButton onClick={showAbout}>
             <NativeIcon name="info" size={16} color={colors.onSurfaceVariant} />
             <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
               {' '}
-              About this version
+              About Relais
             </Text>
           </TextButton>
         </Column>

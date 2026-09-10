@@ -21,7 +21,7 @@ export interface IconProps {
 }
 
 export const sfSymbols = {
-  camera: 'video.fill',
+  camera: 'camera.fill',
   monitor: 'viewfinder',
   qr: 'qrcode.viewfinder',
   wifi: 'wifi',

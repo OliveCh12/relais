@@ -1,6 +1,7 @@
 import AVFoundation
 import ExpoModulesCore
 import Photos
+import ImageIO
 
 enum RecordingLibrary {
   static func directory() throws -> URL {
@@ -18,25 +19,32 @@ enum RecordingLibrary {
   static func save(path: String) async throws -> String {
     let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
     guard url.deletingLastPathComponent() == (try directory()).resolvingSymlinksInPath(),
-      ["mov", "mp4"].contains(url.pathExtension), FileManager.default.fileExists(atPath: url.path)
-    else { throw RecordingLibraryException("Video file not found.") }
+      ["mov", "mp4", "heic", "jpg"].contains(url.pathExtension), FileManager.default.fileExists(atPath: url.path)
+    else { throw RecordingLibraryException("Capture file not found.") }
+    let photo = ["heic", "jpg"].contains(url.pathExtension)
+    if photo {
+      guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), CGImageSourceGetCount(source) > 0 else {
+        throw RecordingLibraryException("The photo could not be saved. The file is still in Relais.")
+      }
+    } else {
     let asset = AVURLAsset(url: url)
     let duration = try await asset.load(.duration)
     let tracks = try await asset.loadTracks(withMediaType: .video)
     guard duration.seconds.isFinite, duration.seconds > 0, !tracks.isEmpty else {
       throw RecordingLibraryException("The video could not be finalized. The file has been retained.")
     }
+    }
     let permission = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
     guard permission == .authorized || permission == .limited else {
-      throw RecordingLibraryException("Allow adding to Photos in Settings, then try again. Your video is still in Relais.")
+      throw RecordingLibraryException("Allow adding to Photos in Settings, then try again. Your capture is still in Relais.")
     }
     var identifier: String?
     try await PHPhotoLibrary.shared().performChanges {
-      identifier = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)?
+      identifier = (photo ? PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url) : PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url))?
         .placeholderForCreatedAsset?.localIdentifier
     }
     guard let identifier else {
-      throw RecordingLibraryException("Photos did not confirm the import. Your video is still in Relais.")
+      throw RecordingLibraryException("Photos did not confirm the import. Your capture is still in Relais.")
     }
     try? FileManager.default.removeItem(at: url)
     return identifier

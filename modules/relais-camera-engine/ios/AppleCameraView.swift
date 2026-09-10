@@ -1,259 +1,216 @@
+import Combine
 import ExpoModulesCore
 import SwiftUI
 
 final class AppleCameraView: ExpoView {
-  #if DEBUG
   static weak var current: AppleCameraView?
-  func debug(_ action: String) throws -> [String: Any] {
-    if action == "settings" { model.showSettings = true }
-    if action == "dismissSettings" { model.showSettings = false }
-    if action == "cinematic" { model.change { $0.cinematic = true } }
-    if action == "video" { model.change { $0.cinematic = false } }
-    if action == "snapshot" {
-      let url = FileManager.default.temporaryDirectory.appendingPathComponent("relais-native-camera.png")
-      let surface: UIView = window ?? self
-      let image = UIGraphicsImageRenderer(bounds: surface.bounds).image { _ in surface.drawHierarchy(in: surface.bounds, afterScreenUpdates: true) }
-      try image.pngData()?.write(to: url)
-    }
-    return ["ready": model.ready, "configuring": model.configuring, "height": model.settings.height,
-            "fps": model.settings.fps, "hdr": model.settings.hdr, "cinematic": model.settings.cinematic,
-            "cinematicSupported": model.cinematicSupported, "phase": model.phase,
-            "message": model.message, "zoomStops": model.zoomStops, "settingsPresented": model.showSettings,
-            "idleTimerDisabled": UIApplication.shared.isIdleTimerDisabled,
-            "profiles": Array(Set(model.profiles.map(\.id))).sorted()]
-  }
-  #endif
   let onClose = EventDispatcher()
-  private let model = AppleCameraModel()
+  let onConnect = EventDispatcher()
+  let onMonitor = EventDispatcher()
+  let onCameraState = EventDispatcher()
+  let model = AppleCameraModel()
   private var host: UIHostingController<AppleCameraScreen>?
+  private var subscription: AnyCancellable?
+  private var stateScheduled = false
+  private var lastState: NSDictionary?
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
-    #if DEBUG
-    Self.current = self
-    #endif
     backgroundColor = .black
-    let host = UIHostingController(rootView: AppleCameraScreen(model: model))
+    let host = UIHostingController(rootView: AppleCameraScreen(model: model, monitor: { [weak self] in self?.onMonitor([:]) }))
     host.overrideUserInterfaceStyle = .dark
     host.view.backgroundColor = .black
     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     addSubview(host.view)
     self.host = host
     model.onClose = { [weak self] in self?.onClose([:]) }
+    model.onConnect = { [weak self] in self?.onConnect([:]) }
+    subscription = model.objectWillChange.sink { [weak self] in self?.scheduleState() }
   }
 
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    host?.view.frame = bounds
+  private func scheduleState() {
+    guard !stateScheduled else { return }
+    stateScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.stateScheduled = false
+      let state = self.model.captureState
+      guard self.lastState?.isEqual(to: state) != true else { return }
+      self.lastState = state as NSDictionary
+      self.onCameraState(state)
+    }
   }
-
+  override func layoutSubviews() { super.layoutSubviews(); host?.view.frame = bounds }
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil {
+      if Self.current === self { Self.current = nil }
       model.disappear()
       host?.willMove(toParent: nil)
       host?.removeFromParent()
       return
     }
-    guard window != nil, let host, host.parent == nil else { return }
+    guard let host, host.parent == nil else { return }
     var responder: UIResponder? = next
     while let current = responder {
       if let parent = current as? UIViewController {
+        Self.current = self
         parent.addChild(host)
         host.didMove(toParent: parent)
         model.appear()
+        scheduleState()
         break
       }
       responder = current.next
     }
   }
+
+  #if DEBUG
+  func debug(_ action: String) throws -> [String: Any] {
+    if action == "settings" { model.showSettings = true }
+    if action == "dismissSettings" { model.showSettings = false }
+    if action == "cinematic" { model.change { $0.photo = false; $0.cinematic = true } }
+    if action == "video" { model.change { $0.photo = false; $0.cinematic = false } }
+    if action == "photo" { model.change { $0.photo = true; $0.cinematic = false } }
+    return model.captureState.merging(["mounted": true, "settingsPresented": model.showSettings,
+      "idleTimerDisabled": UIApplication.shared.isIdleTimerDisabled,
+      "profiles": Array(Set(model.profiles.map(\.id))).sorted()]) { _, new in new }
+  }
+  #endif
 }
 
 private struct AppleCameraScreen: View {
   @ObservedObject var model: AppleCameraModel
+  let monitor: () -> Void
   @State private var grid = UserDefaults.standard.bool(forKey: "relais.camera.grid")
-  @State private var captureAngle: CGFloat = 90
+  @State private var angle: CGFloat = 90
   @State private var confirmClose = false
+  private var available: Bool { model.activeDevice != nil }
+  private var mode: String { model.settings.photo ? "photo" : model.settings.cinematic ? "cinematic" : "video" }
 
   var body: some View {
     GeometryReader { geometry in
       let landscape = geometry.size.width > geometry.size.height
       ZStack {
         Color.black.ignoresSafeArea()
-        AppleCameraPreview(model: model, grid: grid, captureAngle: $captureAngle).ignoresSafeArea()
-        if !model.authorized || (model.activeDevice == nil && !model.configuring) { introduction }
+        AppleCameraPreview(model: model, grid: grid && available, captureAngle: $angle).ignoresSafeArea()
+        if !available && !model.configuring { introduction.padding(.horizontal, 28) }
         VStack(spacing: 0) {
-          topBar
-          Spacer()
-          if model.authorized && model.activeDevice != nil {
-            if landscape {
-              HStack(alignment: .bottom) { status; Spacer(); controls(landscape: true) }
-            } else {
-              status
-              controls(landscape: false)
+          HStack {
+            icon("xmark", "Close Camera") { if model.busy { confirmClose = true } else { model.requestClose() } }
+            Spacer()
+            if available {
+              if model.recording, let started = model.startedAt {
+                Text(started, style: .timer).monospacedDigit().font(.headline).foregroundStyle(.red)
+              } else {
+                Text(model.settings.photo ? model.photoQuality : "\(AppleCaptureCatalog.label(model.settings.height)) · \(model.settings.fps)")
+                  .font(.subheadline.weight(.semibold)).monospacedDigit()
+              }
             }
+            Spacer()
+            if available { icon("slider.horizontal.3", "Camera settings") { model.showSettings = true } }
+            else { Color.clear.frame(width: 44, height: 44) }
+          }
+          .padding(.horizontal, 16).padding(.top, 4)
+          Spacer()
+          if available {
+            HStack(alignment: .bottom) {
+              if landscape { Spacer() }
+              controls(landscape: landscape)
+                .frame(maxWidth: landscape ? 280 : .infinity)
+            }.padding(.horizontal, 20).padding(.bottom, 10)
           }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
+        if model.configuring { ProgressView().tint(.white).accessibilityLabel("Preparing camera") }
       }
     }
-    .preferredColorScheme(.dark)
-    .tint(.yellow)
-    .onChange(of: grid) { value in UserDefaults.standard.set(value, forKey: "relais.camera.grid") }
+    .foregroundStyle(.white).preferredColorScheme(.dark).tint(.yellow)
+    .onChange(of: grid) { UserDefaults.standard.set($0, forKey: "relais.camera.grid") }
+    .onChange(of: angle) { model.captureAngle = $0; RelaisPreviewSource.shared().rotation = (Int(($0 / 90).rounded()) * 90 % 360 + 360) % 360 }
     .sheet(isPresented: $model.showSettings) { settingsSheet }
-    .confirmationDialog("Finish recording before leaving?", isPresented: $confirmClose, titleVisibility: .visible) {
+    .confirmationDialog("Close Camera?", isPresented: $confirmClose, titleVisibility: .visible) {
       Button("Finish and close") { model.requestClose() }
-      Button("Keep recording", role: .cancel) {}
-    }
-  }
-
-  private var topBar: some View {
-    HStack(spacing: 12) {
-      icon("xmark", "Close Camera") { if model.busy { confirmClose = true } else { model.requestClose() } }
-      Spacer(minLength: 0)
-      if model.recording, let start = model.startedAt {
-        Text(start, style: .timer).monospacedDigit().font(.system(.headline, design: .rounded))
-          .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8)
-          .background(.red, in: Capsule())
-      } else if model.activeDevice != nil {
-        HStack(spacing: 0) {
-          Menu {
-            ForEach(heights, id: \.self) { height in
-              Button(AppleCaptureCatalog.label(height)) { model.change { $0.height = height } }
-            }
-          } label: { Text(AppleCaptureCatalog.label(model.settings.height)).font(.subheadline.weight(.semibold)).frame(minWidth: 60, minHeight: 44) }
-          Menu {
-            ForEach(rates, id: \.self) { fps in
-              Button("\(fps) fps") { model.change { $0.fps = fps } }
-            }
-          } label: { Text("\(model.settings.fps)").font(.subheadline.weight(.semibold)).monospacedDigit().frame(minWidth: 44, minHeight: 44) }
-        }
-        .foregroundStyle(.white)
-        .background(.ultraThinMaterial, in: Capsule())
-        .disabled(model.busy || model.configuring)
-        .accessibilityElement(children: .contain)
-      }
-      Spacer(minLength: 0)
-      icon(model.torch ? "bolt.fill" : "bolt.slash", model.torch ? "Turn off the light" : "Turn on the light", selected: model.torch) { model.setTorch() }
-        .disabled(!model.ready || !model.torchAvailable)
-    }
+      Button("Stay in Camera", role: .cancel) {}
+    } message: { Text("Your capture will be saved before Camera closes.") }
   }
 
   private var introduction: some View {
     VStack(spacing: 16) {
-      Image(systemName: "video").font(.system(size: 36, weight: .light))
-      Text(model.authorized ? "Camera unavailable" : "Ready to record").font(.title2.weight(.semibold))
-      Text(model.authorized ? "Use a physical iPhone to record. The simulator can act as a monitor." : "Your videos stay on this phone and are added to Photos.")
+      Image(systemName: "camera").font(.largeTitle).accessibilityHidden(true)
+      #if targetEnvironment(simulator)
+      Text("Use this device as a monitor").font(.title3.weight(.semibold))
+      Text("Connect your iPhone to take photos and record video remotely.")
         .font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
-      if !model.authorized {
-        Button("Open Camera", systemImage: "video") { model.requestAccess() }.buttonStyle(.borderedProminent)
-        Button("Phone settings") {
-          if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-        }
-      } else {
-        Button("Try again") { model.retry() }.disabled(model.configuring)
-      }
-      if !model.message.isEmpty { Text(model.message).font(.footnote).multilineTextAlignment(.center) }
-      if !model.pending.isEmpty { Button("Add retained videos to Photos") { model.recover() } }
-    }.padding(32)
-  }
-
-  private var status: some View {
-    VStack(spacing: 8) {
-      if model.lowLight {
-        Label("Cinematic needs more light", systemImage: "sun.max")
-          .font(.footnote).padding(8).background(.ultraThinMaterial, in: Capsule())
-      }
-      if model.focusLocked {
-        Button(model.settings.cinematic ? "Focus locked · unlock" : "AE/AF locked · unlock") { model.resetFocus() }
-          .font(.caption).padding(8).background(.ultraThinMaterial, in: Capsule())
-      }
-      if !model.message.isEmpty {
-        Text(model.message).font(.footnote).multilineTextAlignment(.center).padding(10)
-          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-      }
-      if !model.pending.isEmpty && !model.busy {
-        Button("Add to Photos", systemImage: "square.and.arrow.down") { model.recover() }
-          .buttonStyle(.bordered)
-      }
-    }.padding(.bottom, 12)
+      Button("Open Monitor", action: monitor).buttonStyle(.borderedProminent).tint(.blue)
+      #else
+      Text(model.authorized ? "Camera unavailable" : "Your camera, ready to connect").font(.title3.weight(.semibold))
+      Text(model.authorized ? model.message : "Take photos and record video here, or control this camera from another phone.")
+        .font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
+      Button(model.authorized ? "Try again" : "Open Camera") { if model.authorized { model.retry() } else { model.requestAccess() } }
+        .buttonStyle(.borderedProminent).tint(.blue)
+      #endif
+    }
   }
 
   private func controls(landscape: Bool) -> some View {
-    VStack(spacing: 18) {
-      if model.ready {
-        HStack(spacing: 4) {
-          ForEach(model.zoomStops, id: \.self) { zoom in
-            Button { model.setZoom(zoom) } label: {
-              Text("\(zoom, specifier: zoom.rounded() == zoom ? "%.0f" : "%.1f")×")
-                .font(.system(size: 14, weight: .semibold)).monospacedDigit()
-                .foregroundStyle(abs(model.zoom - zoom) < 0.08 ? .yellow : .white)
-                .frame(minWidth: 44, minHeight: 44)
-                .background(abs(model.zoom - zoom) < 0.08 ? Color.white.opacity(0.15) : .clear, in: Circle())
-            }.buttonStyle(.plain).accessibilityLabel("Zoom \(zoom, specifier: "%.1f") times")
-          }
-        }.padding(4).background(.ultraThinMaterial, in: Capsule())
+    VStack(spacing: 14) {
+      if !model.message.isEmpty {
+        Text(model.message).font(.footnote).multilineTextAlignment(.center)
+          .padding(8).background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+          .accessibilityAddTraits(.updatesFrequently)
       }
-      HStack(spacing: landscape ? 14 : 42) {
-        icon("slider.horizontal.3", "Video settings") { model.showSettings = true }
+      if model.phase == "pending" || (!model.pending.isEmpty && !model.busy) {
+        Button("Add to Photos") { model.recover() }.buttonStyle(.bordered)
+      }
+      if model.zoomStops.count > 1 && !landscape {
+        Picker("Zoom", selection: Binding(get: { nearestZoom }, set: { model.setZoom($0) })) {
+          ForEach(model.zoomStops, id: \.self) { value in Text("\(value, specifier: "%g")×").tag(value) }
+        }.pickerStyle(.segmented).frame(maxWidth: 260).disabled(!model.ready)
+      }
+      HStack {
+        icon("qrcode", "Connect a monitor") { model.onConnect?() }
+        Spacer()
         Button {
-          if model.recording || model.phase == "starting" { model.stopRecording() }
-          else { model.record(rotation: captureAngle) }
+          if model.recording { model.stopRecording() }
+          else if model.settings.photo { model.takePhoto() }
+          else { model.record(rotation: model.captureAngle) }
         } label: {
           ZStack {
-            Circle().strokeBorder(.white, lineWidth: 4).frame(width: 80, height: 80)
-            RoundedRectangle(cornerRadius: model.recording ? 7 : 34)
-              .fill(.red).frame(width: model.recording ? 30 : 66, height: model.recording ? 30 : 66)
+            Circle().strokeBorder(.white, lineWidth: 3).frame(width: 72, height: 72)
             if model.busy && !model.recording { ProgressView().tint(.white) }
-          }.frame(width: 88, height: 88)
-        }
-        .buttonStyle(.plain)
-        .disabled((model.busy && !model.recording && model.phase != "starting") || (!model.ready && !model.recording))
-        .accessibilityLabel(model.recording ? "Stop recording" : "Record a video")
-        icon("arrow.trianglehead.2.clockwise.rotate.90.camera", "Switch camera") { model.change { $0.front.toggle() } }
+            else if model.recording { RoundedRectangle(cornerRadius: 6).fill(.red).frame(width: 28, height: 28) }
+            else { Circle().fill(model.settings.photo ? .white : .red).frame(width: 60, height: 60) }
+          }.frame(width: 84, height: 84)
+        }.buttonStyle(.plain)
+          .disabled((model.busy && !model.recording) || (!model.recording && (!model.ready || model.configuring || model.phase == "pending")))
+          .accessibilityLabel(model.recording ? "Stop recording" : model.settings.photo ? "Take photo" : "Record video")
+        Spacer()
+        icon("arrow.triangle.2.circlepath.camera", "Switch camera") { model.change { $0.front.toggle() } }
           .disabled(model.busy || model.configuring)
       }
-      if model.cinematicSupported {
-        Picker("Capture mode", selection: Binding(
-          get: { model.settings.cinematic },
-          set: { value in model.change { $0.cinematic = value } }
-        )) {
-          Text("Video").tag(false)
-          Text("Cinematic").tag(true)
-        }
-        .pickerStyle(.segmented)
-        .frame(maxWidth: 300)
-        .disabled(model.busy || model.configuring)
-        .accessibilityLabel("Capture mode")
-      } else {
-        Text("Video").font(.subheadline.weight(.semibold))
-      }
+      Picker("Capture mode", selection: Binding(get: { mode }, set: { value in
+        model.change { $0.photo = value == "photo"; $0.cinematic = value == "cinematic" }
+      })) {
+        Text("Photo").tag("photo")
+        Text("Video").tag("video")
+        if model.cinematicSupported { Text("Cinematic").tag("cinematic") }
+      }.pickerStyle(.segmented).disabled(model.busy || model.configuring)
+      Text(model.connectionLabel).font(.caption).foregroundStyle(.secondary).lineLimit(2)
     }
-    .padding(.vertical, 12)
-    .frame(maxWidth: landscape ? 300 : .infinity)
   }
+  private var nearestZoom: Double { model.zoomStops.min { abs($0 - model.zoom) < abs($1 - model.zoom) } ?? 1 }
 
-  @ViewBuilder
-  private func icon(_ symbol: String, _ label: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
+  @ViewBuilder private func icon(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
     if #available(iOS 26.0, *) {
-      Button(action: action) {
-        Image(systemName: symbol).font(.title3)
-          .foregroundStyle(selected ? .yellow : .white)
-          .frame(minWidth: 28, minHeight: 28)
-      }.buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
-        .accessibilityLabel(label)
+      Button(label, systemImage: symbol, action: action).labelStyle(.iconOnly)
+        .buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.regular)
+        .frame(width: 44, height: 44).tint(.white)
     } else {
-      Button(action: action) {
-        Image(systemName: symbol).font(.title3)
-          .foregroundStyle(selected ? .yellow : .white)
-          .frame(minWidth: 28, minHeight: 28)
-      }.buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.large)
-        .accessibilityLabel(label)
+      Button(label, systemImage: symbol, action: action).labelStyle(.iconOnly)
+        .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.regular)
+        .frame(width: 44, height: 44).tint(.white)
     }
   }
-
   private var heights: [Int32] { Array(Set(model.profiles.map(\.height))).sorted(by: >) }
   private var rates: [Int] { Array(Set(model.profiles.filter { $0.height == model.settings.height && $0.hdr == model.settings.hdr }.map(\.fps))).sorted() }
   private var hdrSupported: Bool { model.profiles.contains { $0.height == model.settings.height && $0.fps == model.settings.fps && $0.hdr } }
@@ -262,52 +219,29 @@ private struct AppleCameraScreen: View {
     NavigationStack {
       Form {
         Section {
-          Picker("Resolution", selection: Binding(get: { model.settings.height }, set: { value in model.change { $0.height = value } })) {
-            ForEach(heights, id: \.self) { Text(AppleCaptureCatalog.label($0)).tag($0) }
-          }
-          Picker("Frames per second", selection: Binding(get: { model.settings.fps }, set: { value in model.change { $0.fps = value } })) {
-            ForEach(rates, id: \.self) { Text("\($0) fps").tag($0) }
-          }
-          Toggle(isOn: Binding(get: { model.settings.hdr }, set: { value in model.change { $0.hdr = value } })) {
-            Label("HDR video", systemImage: "circle.lefthalf.filled")
-          }.disabled(!hdrSupported)
-          Toggle(isOn: Binding(get: { model.settings.stabilization }, set: { value in model.change { $0.stabilization = value } })) {
-            Label("Automatic stabilization", systemImage: "hand.raised")
-          }.disabled(!model.stabilizationSupported)
-          if !model.stabilizationSupported {
-            Text("Stabilization is unavailable with these camera settings.").font(.footnote).foregroundStyle(.secondary)
-          }
-          Toggle(isOn: Binding(get: { model.settings.audio }, set: model.setAudio)) { Label("Record audio", systemImage: "mic") }
-        } header: { Text("Recording") } footer: {
-          Text("Only combinations supported by this camera are offered. HDR preserves more detail in shadows and highlights. Higher frame rates need more light and storage.")
-        }.disabled(model.busy || model.configuring)
-        if model.settings.cinematic {
-          Section {
-            HStack { Label("Depth", systemImage: "f.cursive"); Spacer(); Text("ƒ/\(model.aperture, specifier: "%.1f")").monospacedDigit() }
-            Slider(value: Binding(get: { model.aperture }, set: model.setAperture), in: model.apertureRange)
-              .accessibilityLabel("Cinematic simulated aperture")
-          } footer: { Text("Apple’s Cinematic mode creates depth effects and focus transitions.") }
-            .disabled(model.busy)
+          Label("Focus, exposure and color adjust automatically", systemImage: "sparkles")
+          Toggle("Grid", isOn: $grid)
+        }
+        if !model.settings.photo {
+          Section("Video quality") {
+            Picker("Resolution", selection: Binding(get: { model.settings.height }, set: { value in model.change { $0.height = value } })) {
+              ForEach(heights, id: \.self) { Text(AppleCaptureCatalog.label($0)).tag($0) }
+            }
+            Picker("Frame rate", selection: Binding(get: { model.settings.fps }, set: { value in model.change { $0.fps = value } })) {
+              ForEach(rates, id: \.self) { Text("\($0) fps").tag($0) }
+            }
+            Toggle("HDR video", isOn: Binding(get: { model.settings.hdr }, set: { value in model.change { $0.hdr = value } })).disabled(!hdrSupported)
+            Toggle("Record audio", isOn: Binding(get: { model.settings.audio }, set: model.setAudio))
+          }.disabled(model.busy || model.configuring)
         }
         Section {
-          HStack { Label("Exposure", systemImage: "plusminus"); Spacer(); Text("\(model.exposure, specifier: "%+.1f") EV").monospacedDigit() }
-          Slider(value: Binding(get: { model.exposure }, set: model.setExposure), in: model.exposureRange)
-            .accessibilityLabel("Exposure compensation")
-          Button("Reset exposure") { model.setExposure(0) }
-          Toggle(isOn: $grid) { Label("Grid", systemImage: "grid") }
-          Button("Autofocus", systemImage: "viewfinder") { model.resetFocus() }
-        } header: { Text("Framing") } footer: {
-          Text("Tap your subject to focus. Touch and hold to lock focus and exposure. Pinch to zoom. Focus, exposure and white balance adjust automatically.")
-        }
-        Section {
-          Label("Automatically add to Photos", systemImage: "photo.on.rectangle")
-          Text("The original video is recorded on this iPhone. Sharing a preview with another device is currently a separate mode.").font(.footnote).foregroundStyle(.secondary)
+          Label("Saved on this iPhone", systemImage: "photo.on.rectangle")
+          Text("Photos and videos are added to Photos. A monitor controls this camera; it does not replace the original file.")
+            .font(.footnote).foregroundStyle(.secondary)
         }
       }
-      .navigationTitle("Video settings").navigationBarTitleDisplayMode(.inline)
+      .navigationTitle("Camera settings").navigationBarTitleDisplayMode(.inline)
       .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.showSettings = false } } }
-    }
-    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
-    .preferredColorScheme(.dark)
+    }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
   }
 }

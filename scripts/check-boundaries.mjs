@@ -21,7 +21,18 @@ async function visit(directory) {
         const localCameraOwner =
           path === 'modules/relais-camera-engine/src/LocalCamera.tsx' &&
           name === 'react-native-vision-camera';
-        if (!spike && !localCameraOwner && /react-native-(webrtc|vision-camera)/.test(name))
+        const nativeTransport =
+          [
+            'src/transport/PeerSession.ts',
+            'src/transport/native/media.ts',
+            'src/transport/native/RemotePreview.tsx',
+          ].includes(path) && name === 'react-native-webrtc';
+        if (
+          !spike &&
+          !localCameraOwner &&
+          !nativeTransport &&
+          /react-native-(webrtc|vision-camera)/.test(name)
+        )
           errors.push(`${path}: direct native camera/transport access`);
         if (path.startsWith('src/domain/') && /react|expo|camera\/native/.test(name))
           errors.push(`${path}: forbidden domain dependency`);
@@ -31,7 +42,7 @@ async function visit(directory) {
         node.expression.getText(source).includes('getUserMedia') &&
         !spike
       )
-        errors.push(`${path}: getUserMedia hors spike`);
+        errors.push(`${path}: getUserMedia outside the isolated spike`);
       ts.forEachChild(node, check);
     }
     check(source);

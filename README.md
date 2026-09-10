@@ -2,18 +2,20 @@
 
 Use one phone as a camera and another as a monitor. Relais combines React Native navigation with native platform interfaces: **AVFoundation and SwiftUI on iPhone; CameraX and Jetpack Compose on Android**.
 
-This is a development prototype. **Local recording and the remote video feed are currently separate flows.** Recording and gallery import are implemented; complete file, audio and Photos/MediaStore validation remains a physical-device task. Read [STATUS.md](STATUS.md) for evidence and known issues.
+This is a development prototype. **Photo capture, native video recording and remote camera controls now share one Camera/Monitor flow.** The Mac still prepares the local connection. Physical-device validation and known issues are recorded in [STATUS.md](STATUS.md).
 
 ## Current features
 
-- **Camera:** native viewfinder, recording controls, hardware-derived resolution/frame-rate profiles, HDR when supported, stabilization, microphone, torch, camera switching, zoom, focus, exposure and a framing grid.
-- **iPhone Cinematic capture:** Apple's public iOS 26 APIs provide depth and focus transitions on supported cameras. An iPhone 17 Pro successfully opened 4K HDR30 in Video and Cinematic modes. Its catalog also exposed 4K120 profiles; recording at that rate has not been validated.
-- **Monitor:** a development-only WebRTC preview, with remembered devices and measured link-quality bars. The Mac currently provides LAN signaling; video travels directly between endpoints.
-- **Native interaction:** SwiftUI Forms, segmented pickers, SF Symbols and system sheets on iOS; Material lists, segmented controls, sheets and symbols on Android. The web uses independent scaffold screens.
+- **Camera:** Photo and Video, native viewfinder, compatible video resolution/frame-rate/HDR settings, automatic focus/exposure/color/stabilization, zoom, camera switching and grid. Originals are saved on this phone through PhotoKit/MediaStore.
+- **iPhone Cinematic capture:** Apple's public iOS 26 APIs on supported native formats. No custom depth effect or manual focus controls.
+- **Monitor:** full-width native live preview, remote photo shutter and video start/stop, Camera state, remembered devices and measured connection quality.
+- **Native interaction:** SwiftUI navigation, Forms, segmented pickers, SF Symbols and sheets on iOS; Material lists, segmented controls, sheets and symbols on Android. Web retains separate scaffolds.
 
-Open **Camera** to record locally. The red button starts/stops a take; settings expose compatible formats and framing options. A video is reported as saved only after the gallery confirms its import. Failed imports retain the private file for retry.
+Open **Camera** on one phone and **Monitor** on the other. For a first connection, tap Camera's code button and scan or paste the code in Monitor. Both apps must stay open on the same Wi-Fi network. A single available saved camera reconnects automatically; choose from the list when several are available.
 
-Open **Monitor** for remembered devices and remote preview. On the sending phone, choose **Share this phone's view**. On the receiving phone, choose **Scan a QR code**, or open options to paste a shared code. After the first pairing, select the sender when it becomes **Available**. Both apps must remain open on the same Wi-Fi. Closing the native QR sheet keeps sharing active.
+Choose **Photo** or **Video**, then use the shutter on either phone. Monitor waits for Camera state before displaying recording. Captures are reported saved only after gallery confirmation. Failed imports retain the private original for retry. Closing Monitor or losing Wi-Fi does not stop a local recording.
+
+See [native remote capture](docs/research/native-remote-capture.md) for the implementation, public API sources and hardware limitations.
 
 ## Get started
 
@@ -79,7 +81,7 @@ VisionCamera 5.2.3 includes **CameraX 1.7.0-alpha03**; Expo UI includes **Materi
 
 ## Contracts and development boundaries
 
-`RelaisCameraEngine` owns native local capture. Its older **remote-control contract** still reports fixture capabilities (`source: stub`, `canRecord: false`, `canPreview: false`) and rejects capture commands. Do not confuse that contract with the working local camera implementations. Web and demo-pairing screens retain explicit placeholders and disabled recording.
+`RelaisCameraEngine` owns native local capture. Its older **fixture contract** still reports fixture capabilities (`source: stub`, `canRecord: false`, `canPreview: false`) and rejects capture commands. Do not confuse that contract with the working local camera implementations. Web and demo-pairing screens retain explicit placeholders and disabled recording.
 
 `/dev/webrtc` is excluded from native release bundles. The isolated spike is the only place allowed to call `getUserMedia`. It requests an audio-free 720p30 preview, prefers H.264 and requests a 2.5 Mbps sender cap when supported. Actual negotiation may differ. Debug probes can measure ping RTT and a non-recording `rec-mock` echo; these are not production camera controls.
 
@@ -92,7 +94,7 @@ An iPhone Camera → iOS Simulator Monitor session received H.264 1280 × 720 at
 - [ ] Test two physical phones in both iPhone/Android directions.
 - [ ] Test shared Wi-Fi and Camera-hosted hotspots without internet.
 - [ ] Test denied permissions, expired QR codes, interruption and background behavior.
-- [ ] Connect the native recording owner to a reduced WebRTC VideoSource.
+- [x] Connect the native recording owner to a reduced WebRTC VideoSource, with no JavaScript video frames.
 - [ ] While recording, interrupt Wi-Fi for five seconds and verify an intact file and restored preview.
 - [ ] Measure UI frame pacing, thermal load, video latency, audio and gallery output on real devices.
 

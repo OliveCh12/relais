@@ -12,7 +12,7 @@
     "ios": "bash scripts/start-ios.sh",
     "android": "bash scripts/start-android.sh",
     "web": "expo start --web",
-    "prebuild": "expo prebuild --no-install",
+    "prebuild": "expo prebuild --no-install --no-clean",
     "build:ios": "bash scripts/build-ios.sh",
     "build:android": "bash scripts/build-android.sh",
     "typecheck": "tsc --noEmit",

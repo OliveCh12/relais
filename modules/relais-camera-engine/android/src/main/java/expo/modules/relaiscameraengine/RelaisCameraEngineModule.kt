@@ -9,6 +9,16 @@ import org.json.JSONObject
 class RelaisCameraEngineModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("RelaisCameraEngine")
+    Function("initializePreviewOutput") {
+      System.loadLibrary("VisionCamera")
+      System.loadLibrary("RelaisPreview")
+    }
+    AsyncFunction("createPreviewTrack") {
+      com.oney.WebRTCModule.RelaisTrackBridge.create(appContext.reactContext as? com.facebook.react.bridge.ReactContext ?: throw CameraFixtureException())
+    }
+    AsyncFunction("createPhotoPath") {
+      RecordingLibrary.createPhotoPath(appContext.reactContext ?: throw CameraFixtureException())
+    }
     AsyncFunction("getRecordingProfiles") { deviceId: String, stabilization: Boolean ->
       RecordingProfiles.query(appContext.reactContext ?: throw CameraFixtureException(), deviceId, stabilization)
     }

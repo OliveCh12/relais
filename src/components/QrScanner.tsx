@@ -1,7 +1,8 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRef } from 'react';
 import { Linking, StyleSheet } from 'react-native';
-import { AppText, Button } from './ui';
+import { AppText } from './ui';
+import { ActionButton } from './ActionButton';
 
 export function QrScanner({ onScan }: { onScan: (value: string) => void }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -15,7 +16,7 @@ export function QrScanner({ onScan }: { onScan: (value: string) => void }) {
             ? 'Camera access lets you scan the QR code.'
             : 'Allow camera access in your phone’s settings to scan the QR code.'}
         </AppText>
-        <Button
+        <ActionButton
           label={permission.canAskAgain ? 'Allow camera access' : 'Open Settings'}
           onPress={() => {
             if (permission.canAskAgain) void requestPermission();

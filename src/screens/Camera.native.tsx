@@ -19,6 +19,9 @@ import {
 import { CameraIconButton } from '@/components/CameraIconButton';
 import { CameraOptions } from '@/components/CameraOptions';
 import { ActionButton } from '@/components/ActionButton';
+import { CaptureModes } from '@/components/CaptureModes';
+import { CameraConnection } from '@/components/connection/CameraConnection';
+import { useConnection } from '@/capture/useConnection';
 import { CameraZoom } from '@/components/CameraZoom';
 
 function act(action: () => Promise<unknown>) {
@@ -32,7 +35,32 @@ export default function CameraScreen() {
   const isFocused = useIsFocused();
   const engine = useLocalCameraEngine(isFocused);
   const [settings, setSettings] = useState(false);
+  const [connect, setConnect] = useState(false);
+  const connection = useConnection('camera', {
+    state: engine.captureState,
+    perform: engine.perform,
+  });
   const [grid, setGrid] = useState(false);
+  useEffect(() => {
+    if (!__DEV__) return;
+    const runtime = globalThis as typeof globalThis & {
+      __relaisAndroidCameraTest?: (action: string) => unknown;
+    };
+    runtime.__relaisAndroidCameraTest = (action) =>
+      action === 'state'
+        ? {
+            ...engine.captureState,
+            qr: connection.qr,
+            connected: connection.connected,
+            status: connection.status,
+          }
+        : action === 'open'
+          ? engine.open()
+          : engine.perform(action as Parameters<typeof engine.perform>[0]);
+    return () => {
+      delete runtime.__relaisAndroidCameraTest;
+    };
+  }, [engine, connection.qr, connection.connected, connection.status]);
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const landscape = window.width > window.height;
@@ -44,8 +72,8 @@ export default function CameraScreen() {
       router.back();
       return;
     }
-    Alert.alert('Finish recording?', 'Your recording will be finalized and added to the gallery.', [
-      { text: 'Keep recording', style: 'cancel' },
+    Alert.alert('Close Camera?', 'Finish saving this capture before closing Camera.', [
+      { text: 'Stay in Camera', style: 'cancel' },
       {
         text: 'Finish',
         onPress: () =>
@@ -91,24 +119,26 @@ export default function CameraScreen() {
           {recording ? (
             <RecordingClock startedAt={engine.recording.startedAt} />
           ) : (
-            <Text style={styles.quality}>{engine.quality || 'VIDEO'}</Text>
+            <Text style={styles.quality}>
+              {engine.quality || (engine.mode === 'photo' ? 'PHOTO' : 'VIDEO')}
+            </Text>
           )}
-          {engine.enabled && (
+          {engine.enabled && engine.mode !== 'photo' && (
             <Text style={styles.caption}>{engine.audio ? 'With audio' : 'No audio'}</Text>
           )}
         </View>
         <CameraIconButton
           icon="settings"
-          label="Video settings"
+          label="Camera settings"
           onPress={() => setSettings(true)}
           disabled={!engine.enabled}
         />
       </View>
       {!engine.enabled && (
         <View style={styles.welcome}>
-          <Text style={styles.title}>Ready to record</Text>
+          <Text style={styles.title}>Ready to capture</Text>
           <Text style={styles.description}>
-            Your video will be recorded on this phone, then added to the gallery.
+            Photos and videos are saved on this phone, then added to the gallery.
           </Text>
           <ActionButton dark icon="camera" label="Open Camera" onPress={() => act(engine.open)} />
           {engine.pending.length > 0 && (
@@ -116,7 +146,7 @@ export default function CameraScreen() {
               dark
               secondary
               icon="gallery"
-              label={`Add ${engine.pending.length} ${engine.pending.length === 1 ? 'video' : 'videos'} to gallery`}
+              label={`Add ${engine.pending.length} ${engine.pending.length === 1 ? 'capture' : 'captures'} to gallery`}
               disabled={engine.busy}
               onPress={() => act(engine.recover)}
             />
@@ -168,7 +198,7 @@ export default function CameraScreen() {
             <ActionButton
               dark
               secondary
-              label={`Add ${engine.pending.length} ${engine.pending.length === 1 ? 'video' : 'videos'} to gallery`}
+              label={`Add ${engine.pending.length} ${engine.pending.length === 1 ? 'capture' : 'captures'} to gallery`}
               onPress={() => act(engine.recover)}
             />
           )}
@@ -181,21 +211,31 @@ export default function CameraScreen() {
           )}
           <View style={[styles.controls, landscape && styles.vertical]}>
             <CameraIconButton
-              icon={engine.torch ? 'torch' : 'torchOff'}
-              label={engine.torch ? 'Turn off the light' : 'Turn on the light'}
-              selected={engine.torch}
-              disabled={!engine.ready || !engine.hasTorch}
-              onPress={engine.setTorch}
+              icon="qr"
+              label="Connect a monitor"
+              onPress={() => setConnect(true)}
             />
             <CameraIconButton
               large
+              photo={engine.mode === 'photo'}
               icon={recording ? 'stop' : 'record'}
-              label={recording ? 'Stop recording' : 'Record a video'}
-              disabled={
-                transitioning ||
-                (!recording && (!engine.ready || engine.recording.phase === 'pending'))
+              label={
+                recording
+                  ? 'Stop recording'
+                  : engine.mode === 'photo'
+                    ? 'Take a photo'
+                    : 'Record a video'
               }
-              onPress={() => act(recording ? engine.stop : engine.start)}
+              disabled={transitioning || (!recording && !engine.captureState.canCapture)}
+              onPress={() =>
+                act(
+                  recording
+                    ? engine.stop
+                    : engine.mode === 'photo'
+                      ? engine.takePhoto
+                      : engine.start,
+                )
+              }
             />
             <CameraIconButton
               icon="flip"
@@ -204,9 +244,38 @@ export default function CameraScreen() {
               onPress={engine.flip}
             />
           </View>
-          {!landscape && !engine.busy && (
-            <Text style={styles.hint}>Pinch to zoom · Tap to focus</Text>
+          {!landscape && (
+            <CaptureModes
+              mode={engine.mode}
+              modes={['photo', 'video']}
+              disabled={engine.busy || !engine.ready}
+              onMode={engine.selectMode}
+            />
           )}
+          {!landscape && (
+            <Text style={styles.hint}>
+              {connection.connected
+                ? `Connected to ${connection.device?.name ?? 'Monitor'}`
+                : 'Focus and exposure are automatic'}
+            </Text>
+          )}
+        </View>
+      )}
+      {landscape && engine.enabled && (
+        <View
+          style={{
+            position: 'absolute',
+            left: insets.left + 20,
+            right: insets.right + 132,
+            bottom: insets.bottom + 12,
+          }}
+        >
+          <CaptureModes
+            mode={engine.mode}
+            modes={['photo', 'video']}
+            disabled={engine.busy || !engine.ready}
+            onMode={engine.selectMode}
+          />
         </View>
       )}
       <CameraOptions
@@ -221,14 +290,12 @@ export default function CameraScreen() {
         profiles={engine.profiles}
         selectedProfile={engine.selectedProfile}
         onProfile={engine.selectProfile}
-        stabilization={engine.stabilization}
-        canStabilize={engine.canStabilize}
-        onStabilization={engine.setStabilization}
-        exposure={engine.exposure}
-        minExposure={engine.minExposure}
-        maxExposure={engine.maxExposure}
-        onExposure={engine.setExposure}
-        onAutoFocus={() => act(async () => engine.resetFocus())}
+        mode={engine.mode}
+      />
+      <CameraConnection
+        connection={connection}
+        visible={connect}
+        onClose={() => setConnect(false)}
       />
     </View>
   );

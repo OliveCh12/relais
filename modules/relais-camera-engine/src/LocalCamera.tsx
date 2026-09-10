@@ -4,17 +4,34 @@ import {
   Camera,
   useCameraDevice,
   useVideoOutput,
+  usePhotoOutput,
   VisionCamera,
   CommonDynamicRanges,
   type CameraRef,
   type CameraSessionConfig,
   type Constraint,
+  type CameraOutput,
 } from 'react-native-vision-camera';
+import { NitroModules } from 'react-native-nitro-modules';
+import type { CaptureAction, CaptureMode, CaptureState } from '../../../src/capture/protocol';
 import NativeEngine, { type RecordingProfile } from './index';
 import { RecordingController } from './RecordingController';
 import { closestRecordingProfile, recordingResolutionLabel } from './recordingProfiles';
 
+const PHOTO_RESOLUTION = { width: 8192, height: 6144 };
+
 export function useLocalCameraEngine(isFocused: boolean) {
+  const [mode, setMode] = useState<CaptureMode>('photo');
+  const modeRef = useRef<CaptureMode>('photo');
+  const photoBusy = useRef(false);
+  const photoFinalization = useRef<Promise<void>>(Promise.resolve());
+  const photoCompletion = useRef<Promise<void>>(Promise.resolve());
+  const [photoState, setPhotoState] = useState({
+    phase: 'idle',
+    startedAt: null as number | null,
+    message: '',
+    pendingPath: null as string | null,
+  });
   const [enabled, setEnabled] = useState(
     () =>
       VisionCamera.cameraPermissionStatus === 'authorized' &&
@@ -28,7 +45,6 @@ export function useLocalCameraEngine(isFocused: boolean) {
   const [audio, setAudio] = useState(
     () => VisionCamera.microphonePermissionStatus === 'authorized',
   );
-  const [torch, setTorch] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [quality, setQuality] = useState('');
@@ -41,8 +57,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
     key: string;
     profiles: RecordingProfile[];
   } | null>(null);
-  const [stabilization, setStabilization] = useState(true);
-  const [exposure, setExposure] = useState(0);
+  const stabilization = true;
   const cameraRef = useRef<CameraRef>(null);
   const bindCamera = useCallback((camera: CameraRef | null) => {
     cameraRef.current = camera;
@@ -79,30 +94,50 @@ export function useLocalCameraEngine(isFocused: boolean) {
     targetResolution: resolution,
     enableAudio: audio,
   });
-  const outputs = useMemo(() => [output], [output]);
+  const photoOutput = usePhotoOutput({
+    targetResolution: PHOTO_RESOLUTION,
+    qualityPrioritization: 'quality',
+    containerFormat: 'jpeg',
+  });
+  const [previewOutput] = useState(() => {
+    NativeEngine.initializePreviewOutput();
+    return NitroModules.createHybridObject<CameraOutput>('CameraOutput');
+  });
+  const activeOutput = mode === 'photo' ? photoOutput : output;
+  const outputs = useMemo(() => [activeOutput, previewOutput], [activeOutput, previewOutput]);
   const constraints = useMemo<Constraint[]>(
-    () => [
-      { resolutionBias: output },
-      { fps: selectedProfile?.fps ?? 30 },
-      {
-        videoDynamicRange: selectedProfile?.hdr
-          ? CommonDynamicRanges.ANY_HDR
-          : CommonDynamicRanges.ANY_SDR,
-      },
-      {
-        videoStabilizationMode:
-          stabilization && device?.supportsVideoStabilizationMode('standard') ? 'standard' : 'off',
-      },
-    ],
-    [output, selectedProfile?.fps, selectedProfile?.hdr, stabilization, device],
+    () =>
+      mode === 'photo'
+        ? [{ resolutionBias: photoOutput }]
+        : [
+            { resolutionBias: output },
+            { fps: selectedProfile?.fps ?? 30 },
+            {
+              videoDynamicRange: selectedProfile?.hdr
+                ? CommonDynamicRanges.ANY_HDR
+                : CommonDynamicRanges.ANY_SDR,
+            },
+            {
+              videoStabilizationMode:
+                stabilization && device?.supportsVideoStabilizationMode('standard')
+                  ? 'standard'
+                  : 'off',
+            },
+          ],
+    [mode, photoOutput, output, selectedProfile?.fps, selectedProfile?.hdr, stabilization, device],
   );
   const [recorder] = useState(
     () => new RecordingController((path) => NativeEngine.saveVideoToLibrary(path)),
   );
-  const recording = useSyncExternalStore(recorder.subscribe, recorder.getSnapshot);
-  const stop = useCallback(() => recorder.stop(), [recorder]);
+  const videoState = useSyncExternalStore(recorder.subscribe, recorder.getSnapshot);
+  const recording = mode === 'photo' ? photoState : videoState;
+  const stop = useCallback(async () => {
+    await recorder.stop();
+    await photoCompletion.current;
+  }, [recorder]);
   const busy =
-    recovering || ['starting', 'recording', 'stopping', 'saving'].includes(recording.phase);
+    recovering ||
+    ['starting', 'recording', 'stopping', 'capturing', 'saving'].includes(recording.phase);
   const updateReady = useCallback((value: boolean) => {
     readyRef.current = value;
     setReady(value);
@@ -145,8 +180,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
       if (!isFocused || AppState.currentState !== 'active') {
         visibilityGeneration.current += 1;
         updateReady(false);
-        void recorder
-          .stopCapture()
+        void Promise.all([recorder.stopCapture(), photoFinalization.current])
           .catch(() => {
             if (current) setError('Recording interrupted. Reopen Camera to continue.');
           })
@@ -212,29 +246,145 @@ export function useLocalCameraEngine(isFocused: boolean) {
     });
   };
 
+  const takePhoto = async () => {
+    if (
+      !readyRef.current ||
+      photoBusy.current ||
+      recoveringRef.current ||
+      photoState.phase === 'pending' ||
+      modeRef.current !== 'photo'
+    )
+      throw new Error('Wait for the camera to be ready.');
+    const request = visibilityGeneration.current;
+    photoBusy.current = true;
+    let finalized!: () => void;
+    let complete!: () => void;
+    photoFinalization.current = new Promise((resolve) => {
+      finalized = resolve;
+    });
+    photoCompletion.current = new Promise((resolve) => {
+      complete = resolve;
+    });
+    setPhotoState({ phase: 'capturing', startedAt: null, message: '', pendingPath: null });
+    let path: string | null = null;
+    try {
+      path = await NativeEngine.createPhotoPath();
+      if (!readyRef.current || request !== visibilityGeneration.current)
+        throw new Error('Camera interrupted. Try again.');
+      const photo = await photoOutput.capturePhoto(
+        { flashMode: device?.hasFlash ? 'auto' : 'off' },
+        {},
+      );
+      try {
+        await photo.saveToFileAsync(path);
+      } finally {
+        photo.dispose();
+      }
+      finalized();
+      setPhotoState({
+        phase: 'saving',
+        startedAt: null,
+        message: 'Adding to gallery…',
+        pendingPath: path,
+      });
+      await NativeEngine.saveVideoToLibrary(path);
+      setPhotoState({
+        phase: 'saved',
+        startedAt: null,
+        message: 'Photo added to gallery',
+        pendingPath: null,
+      });
+    } catch (failure) {
+      const files = await NativeEngine.getPendingRecordings().catch((): string[] => []);
+      const retained = path && files.includes(path) ? path : null;
+      setPhotoState({
+        phase: retained ? 'pending' : 'error',
+        startedAt: null,
+        message: failure instanceof Error ? failure.message : 'Photo could not be saved.',
+        pendingPath: retained,
+      });
+      throw failure;
+    } finally {
+      photoBusy.current = false;
+      finalized();
+      complete();
+    }
+  };
+  const selectMode = (value: CaptureMode) => {
+    if (busy || photoBusy.current || value === 'cinematic')
+      throw new Error('Wait for the camera to finish.');
+    if (modeRef.current === value) return;
+    updateReady(false);
+    modeRef.current = value;
+    setMode(value);
+    setError('');
+  };
+  const perform = async (action: CaptureAction) => {
+    if (action === 'stop') {
+      await stop();
+      return;
+    }
+    if (
+      !readyRef.current ||
+      photoBusy.current ||
+      recoveringRef.current ||
+      busy ||
+      recording.phase === 'pending'
+    )
+      throw new Error('Wait for the camera to be ready.');
+    if (action === 'photo') {
+      await takePhoto();
+      return;
+    }
+    if (action === 'start') {
+      if (modeRef.current !== 'video') throw new Error('Switch to Video first.');
+      await start();
+      if (recorder.getSnapshot().phase === 'error') throw new Error(recorder.getSnapshot().message);
+      return;
+    }
+    selectMode(action.replace('mode-', '') as CaptureMode);
+  };
+
   const flip = () => {
     if (busy || !alternate) return;
     updateReady(false);
     setError('');
     setQuality('');
-    setTorch(false);
-    setExposure(0);
     setPosition((value) => (value === 'back' ? 'front' : 'back'));
   };
 
   const selectedFPS = useRef<number | undefined>(undefined);
   const selectedHDR = useRef(false);
   const configured = useCallback(() => {
-    const resolution = output.currentResolution;
+    const resolution = activeOutput.currentResolution;
     setQuality(
-      resolution
-        ? `${recordingResolutionLabel(Math.min(resolution.width, resolution.height))}${selectedFPS.current ? ` · ${selectedFPS.current} fps` : ''}${selectedHDR.current ? ' · HDR' : ''}`
-        : 'Automatic quality',
+      resolution && mode === 'photo'
+        ? `${Math.round((resolution.width * resolution.height) / 1_000_000)} MP`
+        : resolution
+          ? `${recordingResolutionLabel(Math.min(resolution.width, resolution.height))}${selectedFPS.current ? ` · ${selectedFPS.current} fps` : ''}${selectedHDR.current ? ' · HDR' : ''}`
+          : 'Automatic quality',
     );
     updateReady(runningRef.current && visibleRef.current && AppState.currentState === 'active');
-  }, [output, updateReady]);
+  }, [activeOutput, mode, updateReady]);
+
+  const captureState: CaptureState = {
+    mode,
+    modes: ['photo', 'video'],
+    phase: recording.phase,
+    ready,
+    canShare: ready,
+    canCapture: ready && !busy && recording.phase !== 'pending',
+    quality,
+    message: error || recording.message,
+    startedAt: recording.startedAt ?? 0,
+  };
 
   return {
+    mode,
+    selectMode,
+    takePhoto,
+    perform,
+    captureState,
     enabled,
     ready,
     error,
@@ -242,22 +392,17 @@ export function useLocalCameraEngine(isFocused: boolean) {
     profiles,
     selectedProfile,
     selectProfile: (profile: RecordingProfile) => {
-      if (busy) return;
+      if (
+        busy ||
+        (selectedProfile?.height === profile.height &&
+          selectedProfile.fps === profile.fps &&
+          selectedProfile.hdr === profile.hdr)
+      )
+        return;
       updateReady(false);
       setRequested(profile);
       setError('');
     },
-    stabilization,
-    canStabilize: device?.supportsVideoStabilizationMode('standard') ?? false,
-    setStabilization: (value: boolean) => {
-      if (busy) return;
-      updateReady(false);
-      setStabilization(value);
-    },
-    exposure,
-    minExposure: device?.minExposureBias ?? 0,
-    maxExposure: device?.maxExposureBias ?? 0,
-    setExposure,
     bindCamera,
     zoomStops: device
       ? Array.from(new Set([device.minZoom, 1, 2, ...device.zoomLensSwitchFactors]))
@@ -265,9 +410,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
           .sort((a, b) => a - b)
       : [],
     setZoom: (zoom: number) => cameraRef.current?.startZoomAnimation(zoom, 4),
-    resetFocus: () => cameraRef.current?.resetFocus(),
     audio,
-    torch,
     position,
     busy,
     recording,
@@ -275,20 +418,38 @@ export function useLocalCameraEngine(isFocused: boolean) {
     recover,
     hasCamera: !!device,
     canFlip: !!alternate,
-    hasTorch: device?.hasTorch ?? false,
     open,
     setMicrophone,
     flip,
     start,
     stop,
-    retrySave: () => recorder.retrySave(),
-    setTorch: () => {
-      if (device?.hasTorch) setTorch((value) => !value);
+    retrySave: async () => {
+      if (mode !== 'photo') {
+        await recorder.retrySave();
+        return;
+      }
+      if (!photoState.pendingPath || photoBusy.current) return;
+      photoBusy.current = true;
+      setPhotoState((state) => ({ ...state, phase: 'saving' }));
+      try {
+        await NativeEngine.saveVideoToLibrary(photoState.pendingPath);
+        setPhotoState({
+          phase: 'saved',
+          startedAt: null,
+          message: 'Photo added to gallery',
+          pendingPath: null,
+        });
+      } catch (error) {
+        setPhotoState((state) => ({ ...state, phase: 'pending' }));
+        throw error;
+      } finally {
+        photoBusy.current = false;
+      }
     },
     device,
     outputs,
     constraints,
-    isActive: enabled && foreground && !!selectedProfile,
+    isActive: enabled && foreground && (mode === 'photo' || !!selectedProfile),
     onConfigured: configured,
     onStarted: () => {
       runningRef.current = true;
@@ -316,7 +477,8 @@ export function LocalCameraPreview({
   engine: LocalCameraEngine;
   style?: StyleProp<ViewStyle>;
 }) {
-  if (!engine.enabled || !engine.device || !engine.selectedProfile) return null;
+  if (!engine.enabled || !engine.device || (engine.mode !== 'photo' && !engine.selectedProfile))
+    return null;
   return (
     <Camera
       ref={(camera) => engine.bindCamera(camera)}
@@ -328,9 +490,6 @@ export function LocalCameraPreview({
       orientationSource="device"
       resizeMode="contain"
       enableNativeZoomGesture
-      enableNativeTapToFocusGesture={engine.device.supportsFocusMetering}
-      torchMode={engine.torch ? 'on' : 'off'}
-      exposure={engine.exposure}
       onConfigured={engine.onConfigured}
       onStarted={engine.onStarted}
       onStopped={engine.onStopped}

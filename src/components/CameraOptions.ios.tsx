@@ -37,7 +37,7 @@ export function CameraOptions(props: CameraOptionsProps) {
         >
           <VStack spacing={0}>
             <HStack modifiers={[padding({ horizontal: 20, top: 20, bottom: 8 })]}>
-              <Text modifiers={[font({ textStyle: 'headline' })]}>Video settings</Text>
+              <Text modifiers={[font({ textStyle: 'headline' })]}>Camera settings</Text>
               <Spacer />
               <Button label="Done" onPress={props.onClose} />
             </HStack>
@@ -68,7 +68,7 @@ export function CameraOptions(props: CameraOptionsProps) {
                 <Text>{props.quality || 'Opening camera…'}</Text>
               </Section>
               <Section>
-                <Text>Pinch to zoom. Tap your subject to focus.</Text>
+                <Text>Focus, exposure and color adjust automatically. Pinch to zoom.</Text>
               </Section>
             </Form>
           </VStack>

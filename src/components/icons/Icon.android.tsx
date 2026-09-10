@@ -1,5 +1,5 @@
 import { Host, Icon as ComposeIcon } from '@expo/ui/jetpack-compose';
-import camera from '@expo/material-symbols/videocam.xml';
+import camera from '@expo/material-symbols/photo_camera.xml';
 import monitor from '@expo/material-symbols/crop_free.xml';
 import qr from '@expo/material-symbols/qr_code_scanner.xml';
 import wifi from '@expo/material-symbols/wifi.xml';

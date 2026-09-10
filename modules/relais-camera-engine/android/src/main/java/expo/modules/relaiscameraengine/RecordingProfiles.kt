@@ -35,7 +35,7 @@ object RecordingProfiles {
         val video = VideoCapture.Builder(recorder).setDynamicRange(dynamicRange)
           .setVideoStabilizationEnabled(stabilize && capabilities.isStabilizationSupported).build()
         val preview = Preview.Builder().setDynamicRange(dynamicRange).build()
-        val useCases = listOf(video, preview)
+        val useCases = listOf(video, preview, RelaisPreviewOutput.createAnalysis())
         val base = SessionConfig.Builder(useCases).build()
         if (!info.isSessionConfigSupported(base)) continue
         val ranges = info.getSupportedFrameRateRanges(base)
