@@ -12,7 +12,9 @@ import {
   VStack,
 } from '@expo/ui/swift-ui';
 import {
-  accessibilityLabel,
+  accessibilityHidden,
+  background,
+  shapes,
   buttonStyle,
   disabled,
   font,
@@ -22,10 +24,12 @@ import {
   padding,
   refreshable,
 } from '@expo/ui/swift-ui/modifiers';
+import { useAppTheme } from '@/design/useAppTheme';
 import { availabilityLabels } from '@/connections/model';
 import type { MonitorSetupProps } from './MonitorSetup.types';
 
 export function MonitorSetup(props: MonitorSetupProps) {
+  const theme = useAppTheme();
   return (
     <>
       <Stack.Toolbar placement="right">
@@ -86,45 +90,46 @@ export function MonitorSetup(props: MonitorSetupProps) {
               </VStack>
             )}
             {props.rows.map((row) => (
-              <HStack key={row.device.id} spacing={12}>
-                <Button
-                  onPress={() => props.onSelect(row)}
-                  modifiers={[buttonStyle('plain'), disabled(props.connecting)]}
+              <Button
+                key={row.device.id}
+                onPress={() => props.onSelect(row)}
+                modifiers={[buttonStyle('plain'), disabled(props.connecting)]}
+              >
+                <HStack
+                  spacing={12}
+                  modifiers={[frame({ maxWidth: Infinity, minHeight: 56, alignment: 'leading' })]}
                 >
-                  <HStack
-                    spacing={12}
-                    modifiers={[frame({ maxWidth: Infinity, minHeight: 52, alignment: 'leading' })]}
-                  >
-                    <Image
-                      systemName="smartphone"
-                      size={24}
-                      modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}
-                    />
-                    <VStack alignment="leading" spacing={3}>
-                      <Text modifiers={[font({ textStyle: 'body' })]}>{row.device.name}</Text>
-                      <Text
-                        modifiers={[
-                          font({ textStyle: 'subheadline' }),
-                          foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
-                        ]}
-                      >
-                        {availabilityLabels[row.availability]}
-                      </Text>
-                    </VStack>
-                    <Spacer />
-                  </HStack>
-                </Button>
-                <Button
-                  onPress={() => props.onDetails(row)}
-                  modifiers={[
-                    buttonStyle('plain'),
-                    frame({ minWidth: 44, minHeight: 44 }),
-                    accessibilityLabel(`Details for ${row.device.name}`),
-                  ]}
-                >
-                  <Image systemName="info.circle" size={20} />
-                </Button>
-              </HStack>
+                  <Image
+                    systemName="smartphone"
+                    size={22}
+                    color={row.availability === 'available' ? theme.accent : theme.muted}
+                    modifiers={[
+                      frame({ width: 40, height: 40 }),
+                      background(theme.elevated, shapes.circle()),
+                    ]}
+                  />
+                  <VStack alignment="leading" spacing={3}>
+                    <Text modifiers={[font({ textStyle: 'body' })]}>{row.device.name}</Text>
+                    <Text
+                      modifiers={[
+                        font({ textStyle: 'subheadline' }),
+                        foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                      ]}
+                    >
+                      {availabilityLabels[row.availability]}
+                    </Text>
+                  </VStack>
+                  <Spacer />
+                  <Image
+                    systemName="chevron.right"
+                    size={12}
+                    modifiers={[
+                      foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                      accessibilityHidden(true),
+                    ]}
+                  />
+                </HStack>
+              </Button>
             ))}
           </Section>
         </List>

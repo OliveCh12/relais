@@ -46,7 +46,7 @@ export function parseSavedDevice(value: unknown): SavedDevice {
 export type DeviceAvailability = 'checking' | 'available' | 'offline' | 'unreachable';
 export const availabilityLabels: Record<DeviceAvailability, string> = {
   checking: 'Searching…',
-  available: 'Available',
+  available: 'Online',
   offline: 'Offline',
   unreachable: 'Network unavailable',
 };

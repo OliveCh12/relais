@@ -9,6 +9,9 @@ final class AppleCameraView: ExpoView {
   let onMonitor = EventDispatcher()
   let onCameraState = EventDispatcher()
   let model = AppleCameraModel()
+  var keepSessionAlive = false {
+    didSet { if !keepSessionAlive && window == nil { model.disappear() } }
+  }
   private var host: UIHostingController<AppleCameraScreen>?
   private var subscription: AnyCancellable?
   private var stateScheduled = false
@@ -41,11 +44,14 @@ final class AppleCameraView: ExpoView {
     }
   }
   override func layoutSubviews() { super.layoutSubviews(); host?.view.frame = bounds }
+  deinit { model.disappear() }
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil {
-      if Self.current === self { Self.current = nil }
-      model.disappear()
+      if !keepSessionAlive {
+        if Self.current === self { Self.current = nil }
+        model.disappear()
+      }
       host?.willMove(toParent: nil)
       host?.removeFromParent()
       return

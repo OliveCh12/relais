@@ -1,22 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useConnection } from '@/capture/useConnection';
+import { useCaptureSession } from '@/capture/SessionContext';
 import type { CaptureAction } from '@/capture/protocol';
-import { ConnectionQuality } from '@/components/ConnectionQuality';
 import { CameraIconButton } from '@/components/CameraIconButton';
 import { CaptureModes } from '@/components/CaptureModes';
-import { DeviceDetails } from '@/components/DeviceList';
 import { MonitorSetup } from '@/components/connection/MonitorSetup';
-import { ConnectionSheet } from '@/components/connection/ConnectionSheet';
-import type { ConnectionPanel } from '@/components/connection/ConnectionSheet.types';
 import { useDevices, type DeviceRow } from '@/connections/useDevices';
-import { deviceRegistry } from '@/connections/storage';
-import { linkQuality } from '@/connections/quality';
-import { parsePairingQr, privateLanOrigin, type PairingDescriptor } from '@/signaling/protocol';
+import { parsePairingQr } from '@/signaling/protocol';
 import { RemotePreview } from '@/transport/native/RemotePreview';
 import { useAppTheme } from '@/design/useAppTheme';
 
@@ -25,25 +19,10 @@ function report(error: unknown) {
 }
 export default function MonitorScreen() {
   useKeepAwake();
-  const connection = useConnection('monitor');
-  const {
-    active,
-    focused,
-    start,
-    command: sendCommand,
-    connected,
-    status,
-    diagnostics,
-  } = connection;
-  const [panel, setPanel] = useState<ConnectionPanel | null>(null);
-  const scanning = panel === 'scan';
-  const [scanned, setScanned] = useState<PairingDescriptor | null>(null);
-  const [details, setDetails] = useState<DeviceRow | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [fill, setFill] = useState(false);
-  const autoAttempt = useRef('');
-  const autoConnect = useRef(true);
-  const devices = useDevices(connection.server, focused && !active && !scanning);
+  const { connection, fill } = useCaptureSession();
+  const focused = useIsFocused();
+  const { active, start, command: sendCommand, connected, status, diagnostics } = connection;
+  const devices = useDevices(connection.server, focused && !active);
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const remote = connection.remote;
@@ -55,30 +34,8 @@ export default function MonitorScreen() {
     },
     [sendCommand],
   );
-  const select = (row: DeviceRow) => {
-    if (!row.descriptor) {
-      Alert.alert(
-        row.device.name,
-        'Open Camera on this phone and keep both apps on the same Wi-Fi network.',
-      );
-      return;
-    }
-    setDetails(null);
-    void start(row.descriptor, row.device);
-  };
-  useEffect(() => {
-    if (!autoConnect.current || active || !focused || scanning || panel || details) return;
-    const available = devices.rows.filter((row) => row.descriptor);
-    const row = available.length === 1 ? available[0] : undefined;
-    if (!row?.descriptor || autoAttempt.current === row.descriptor.sessionId) return;
-    autoAttempt.current = row.descriptor.sessionId;
-    void start(row.descriptor, row.device);
-  }, [active, focused, start, devices.rows, scanning, panel, details]);
-  useEffect(() => {
-    if (!scanned || scanning) return;
-    const descriptor = scanned;
-    void start(descriptor).finally(() => setScanned(null));
-  }, [scanned, scanning, start]);
+  const select = (row: DeviceRow) =>
+    router.push({ pathname: '/monitor/device', params: { id: row.device.id } });
   useEffect(() => {
     if (!__DEV__) return;
     const runtime = globalThis as typeof globalThis & {
@@ -87,9 +44,9 @@ export default function MonitorScreen() {
     runtime.__relaisMonitorTest = (action) =>
       action === 'state'
         ? {
-            connected: connected,
+            connected,
             remote,
-            status: status,
+            status,
             devices: devices.rows.map((row) => ({
               name: row.device.name,
               availability: row.availability,
@@ -104,27 +61,13 @@ export default function MonitorScreen() {
       delete runtime.__relaisMonitorTest;
     };
   }, [connected, sendCommand, status, remote, devices.rows, start, diagnostics]);
-  const readCode = (value: string) => {
-    try {
-      const descriptor = parsePairingQr(value);
-      setError(null);
-      setPanel(null);
-      setScanned(descriptor);
-    } catch {
-      setPanel('code');
-      setError('This code is invalid or expired. Open a new connection code on the camera phone.');
-    }
-  };
-  const close = () => {
-    autoConnect.current = false;
-    connection.stop();
-  };
+  const close = () => connection.stop();
   return (
     <View style={{ flex: 1, backgroundColor: visible ? '#000' : theme.background }}>
       <Stack.Screen
         options={{
           headerShown: !visible,
-          title: 'Monitor',
+          title: 'My cameras',
           headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.text,
         }}
@@ -146,14 +89,13 @@ export default function MonitorScreen() {
                 <Text style={styles.caption} numberOfLines={1} ellipsizeMode="middle">
                   {connection.device?.name ?? 'Camera'}
                 </Text>
-                <ConnectionQuality sample={connection.quality} compact />
               </View>
               {recording && <Text style={styles.recording}>Recording</Text>}
             </View>
             <CameraIconButton
               icon="info"
               label="Connection details"
-              onPress={() => setPanel('options')}
+              onPress={() => router.push('/monitor/info')}
             />
           </View>
           <View
@@ -198,73 +140,13 @@ export default function MonitorScreen() {
       ) : (
         <MonitorSetup
           rows={devices.rows}
-          status={error || devices.error || connection.error || (active ? status : '')}
+          status={devices.error || connection.error || (active ? status : '')}
           connecting={active}
           onSelect={select}
-          onDetails={setDetails}
-          onRefresh={() => {
-            autoAttempt.current = '';
-            devices.refresh();
-          }}
-          onAdd={() => setPanel('add')}
-          onSettings={() => setPanel('server')}
+          onRefresh={devices.refresh}
+          onAdd={() => router.push('/monitor/add')}
+          onSettings={() => router.push('/monitor/server')}
           onCancel={close}
-        />
-      )}
-      <ConnectionSheet
-        panel={panel}
-        qr={null}
-        active={connected}
-        fill={fill}
-        status={linkQuality(connection.quality).label}
-        deviceName={connection.device?.name}
-        server={connection.server}
-        error={error}
-        onClose={() => {
-          setPanel(null);
-          setError(null);
-        }}
-        onPanel={setPanel}
-        onFill={setFill}
-        onShare={() => {}}
-        onCode={readCode}
-        onServer={(value) => {
-          try {
-            connection.setServer(privateLanOrigin(value));
-            setPanel(null);
-            setError(null);
-            devices.refresh();
-          } catch {
-            setError('Enter the Mac’s local address, for example http://192.168.1.10:8787.');
-          }
-        }}
-      />
-      {details && (
-        <DeviceDetails
-          row={details}
-          onClose={() => setDetails(null)}
-          onConnect={() => select(details)}
-          onRename={(name) => {
-            void deviceRegistry
-              .rename(details.device.id, name)
-              .then(() => setDetails(null))
-              .catch(report);
-          }}
-          onForget={() => {
-            Alert.alert('Forget this camera?', 'You can pair it again with its connection code.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Forget',
-                style: 'destructive',
-                onPress: () => {
-                  void deviceRegistry
-                    .forget(details.device.id)
-                    .then(() => setDetails(null))
-                    .catch(report);
-                },
-              },
-            ]);
-          }}
         />
       )}
     </View>

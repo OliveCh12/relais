@@ -48,6 +48,7 @@ export function useConnection(
   const cameraRef = useRef(camera);
   const trusted = useRef(false);
   const lastState = useRef('');
+  const metricsEnabled = useRef(false);
   const pending = useRef<{
     id: string;
     resolve: () => void;
@@ -136,69 +137,72 @@ export function useConnection(
         retryTimer.current = setTimeout(() => setRetry((value) => value + 1), 3000);
       };
       try {
-        const peer = new PeerSession({
-          closed: close,
-          status: (value) => {
-            if (isCurrent()) setStatus(value);
+        const peer = new PeerSession(
+          {
+            closed: close,
+            status: (value) => {
+              if (isCurrent()) setStatus(value);
+            },
+            stream: (value) => {
+              if (isCurrent()) setStream(value);
+            },
+            qr: (value) => {
+              if (isCurrent()) setQr(value);
+            },
+            channel: () => {},
+            trusted: (value) => {
+              if (!isCurrent()) return;
+              trusted.current = value;
+              setConnected(value);
+              if (value) {
+                lastState.current = '';
+                publish();
+              }
+            },
+            remembered: (value) => {
+              if (isCurrent()) setDevice(value);
+            },
+            quality: (value) => {
+              if (isCurrent()) setQuality(value);
+            },
+            rtt: () => {},
+            stats: () => {},
+            message: (text) => {
+              if (!isCurrent() || !trusted.current) return;
+              const message = parseMessage(text);
+              if (!message) return;
+              if (role === 'camera') {
+                void host.receive(text, trusted.current).then((reply) => {
+                  if (reply && isCurrent()) {
+                    try {
+                      peer.send(JSON.stringify(reply));
+                      publish();
+                    } catch {}
+                  }
+                });
+              } else if (message.type === 'capture-state') {
+                const state = parseCaptureState(message.state);
+                if (state) setRemote(state);
+              } else if (message.type === 'capture-reply' && message.id === pending.current?.id) {
+                const request = pending.current;
+                if (!request) return;
+                pending.current = null;
+                clearTimeout(request.timer);
+                setSending(false);
+                if (message.ok === true) request.resolve();
+                else
+                  request.reject(
+                    new Error(
+                      typeof message.error === 'string'
+                        ? message.error
+                        : 'Capture failed on the other phone.',
+                    ),
+                  );
+              }
+            },
           },
-          stream: (value) => {
-            if (isCurrent()) setStream(value);
-          },
-          qr: (value) => {
-            if (isCurrent()) setQr(value);
-          },
-          channel: () => {},
-          trusted: (value) => {
-            if (!isCurrent()) return;
-            trusted.current = value;
-            setConnected(value);
-            if (value) {
-              lastState.current = '';
-              publish();
-            }
-          },
-          remembered: (value) => {
-            if (isCurrent()) setDevice(value);
-          },
-          quality: (value) => {
-            if (isCurrent()) setQuality(value);
-          },
-          rtt: () => {},
-          stats: () => {},
-          message: (text) => {
-            if (!isCurrent() || !trusted.current) return;
-            const message = parseMessage(text);
-            if (!message) return;
-            if (role === 'camera') {
-              void host.receive(text, trusted.current).then((reply) => {
-                if (reply && isCurrent()) {
-                  try {
-                    peer.send(JSON.stringify(reply));
-                    publish();
-                  } catch {}
-                }
-              });
-            } else if (message.type === 'capture-state') {
-              const state = parseCaptureState(message.state);
-              if (state) setRemote(state);
-            } else if (message.type === 'capture-reply' && message.id === pending.current?.id) {
-              const request = pending.current;
-              if (!request) return;
-              pending.current = null;
-              clearTimeout(request.timer);
-              setSending(false);
-              if (message.ok === true) request.resolve();
-              else
-                request.reject(
-                  new Error(
-                    typeof message.error === 'string'
-                      ? message.error
-                      : 'Capture failed on the other phone.',
-                  ),
-                );
-            }
-          },
-        });
+          { metrics: metricsEnabled.current },
+        );
         session.current = peer;
         if (descriptor) await peer.startMonitor(descriptor, expected);
         else await peer.startCamera(server, openNativePreview);
@@ -276,9 +280,14 @@ export function useConnection(
   );
 
   const diagnostics = useCallback(() => session.current?.diagnostics(), []);
+  const setMetricsEnabled = useCallback((enabled: boolean) => {
+    metricsEnabled.current = enabled;
+    session.current?.setMetricsEnabled(enabled);
+  }, []);
 
   return {
     diagnostics,
+    setMetricsEnabled,
     error: connectionError,
     server,
     setServer,

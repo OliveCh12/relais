@@ -7,6 +7,7 @@ public final class RelaisCameraEngineModule: Module {
     View(AppleCameraView.self) {
       Events("onClose", "onConnect", "onMonitor", "onCameraState")
       Prop("connectionLabel") { (view: AppleCameraView, label: String) in view.model.connectionLabel = label }
+      Prop("keepSessionAlive") { (view: AppleCameraView, value: Bool) in view.keepSessionAlive = value }
     }
     AsyncFunction("captureAction") { (action: String) throws -> [String: Any] in
       guard let view = AppleCameraView.current else { throw CaptureFailure("Open Camera on the other phone first.") }

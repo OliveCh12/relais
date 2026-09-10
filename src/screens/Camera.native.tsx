@@ -8,7 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Stack, router, useFocusEffect, useIsFocused } from 'expo-router';
+import { Stack, router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -20,8 +20,7 @@ import { CameraIconButton } from '@/components/CameraIconButton';
 import { CameraOptions } from '@/components/CameraOptions';
 import { ActionButton } from '@/components/ActionButton';
 import { CaptureModes } from '@/components/CaptureModes';
-import { CameraConnection } from '@/components/connection/CameraConnection';
-import { useConnection } from '@/capture/useConnection';
+import { useCaptureSession } from '@/capture/SessionContext';
 import { CameraZoom } from '@/components/CameraZoom';
 
 function act(action: () => Promise<unknown>) {
@@ -32,14 +31,12 @@ function act(action: () => Promise<unknown>) {
 
 export default function CameraScreen() {
   useKeepAwake();
-  const isFocused = useIsFocused();
-  const engine = useLocalCameraEngine(isFocused);
+  const { connection, updateCamera } = useCaptureSession();
+  const engine = useLocalCameraEngine(connection.focused);
   const [settings, setSettings] = useState(false);
-  const [connect, setConnect] = useState(false);
-  const connection = useConnection('camera', {
-    state: engine.captureState,
-    perform: engine.perform,
-  });
+  useEffect(() => {
+    updateCamera(engine.captureState, engine.perform);
+  }, [engine.captureState, engine.perform, updateCamera]);
   const [grid, setGrid] = useState(false);
   useEffect(() => {
     if (!__DEV__) return;
@@ -213,7 +210,7 @@ export default function CameraScreen() {
             <CameraIconButton
               icon="qr"
               label="Connect a monitor"
-              onPress={() => setConnect(true)}
+              onPress={() => router.push('/camera/connect')}
             />
             <CameraIconButton
               large
@@ -291,11 +288,6 @@ export default function CameraScreen() {
         selectedProfile={engine.selectedProfile}
         onProfile={engine.selectProfile}
         mode={engine.mode}
-      />
-      <CameraConnection
-        connection={connection}
-        visible={connect}
-        onClose={() => setConnect(false)}
       />
     </View>
   );

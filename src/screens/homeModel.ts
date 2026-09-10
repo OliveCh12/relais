@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { Alert } from 'react-native';
 import { useSessionStore } from '@/session/store';
 import type { Role } from '@/domain/camera';
 
@@ -17,14 +16,7 @@ export const roles = [
 ] as const;
 
 export function showAbout() {
-  Alert.alert(
-    'Relais · Test version',
-    'Open Camera on one phone and Monitor on the other. Capture photos and videos remotely; originals stay on the camera phone. Both apps must stay open on the same Wi-Fi network. This test version uses the Mac to connect.',
-    [
-      ...(__DEV__ ? [{ text: 'Live preview', onPress: () => router.push('/dev/webrtc') }] : []),
-      { text: 'Close', style: 'cancel' },
-    ],
-  );
+  router.push('/about');
 }
 
 export function useChooseRole() {

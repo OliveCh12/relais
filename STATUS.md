@@ -4,6 +4,16 @@
 
 ## Photo and remote capture integration
 
+### Settings-style lists and native stack pages
+
+- Android uses Material Card/ListItem groups and circular Surface device icons. iOS keeps SwiftUI inset-grouped List rows. The whole device row opens a page, including offline devices. Basic online/offline presence stays in the list; no signal statistics are collected there.
+- Add camera, Scan code, Enter code, Connect a monitor, device details, Info, connection settings and About now use real native stack pages with Back. Camera capture settings remain native camera controls. Remembered connections are opened explicitly from their device page.
+- A session provider sits above each Camera/Monitor stack, preserving the transport across child pages. Android keeps its existing camera owner active within that stack. iOS retains the same AVFoundation owner while its view is temporarily detached by a pushed page, releases it when the view is destroyed, and retains its existing application-background handling. Scanning is limited to the focused scanner page, and joining waits until Monitor is shown.
+- Product WebRTC statistics and application pings are disabled by default, enabled only for the connected device's visible Info page, and stopped on exit. Basic presence discovery runs only in the visible list or selected-device page. Native media transport and ICE maintain the connection independently.
+- iPhone and Android ARM64 builds passed and were installed on both physical devices, preserving data. The iPhone binary passed strict signature verification. Both phones were locked afterward, preventing runtime verification of the final navigation; capture continuity across pages still needs owner testing. No new visual QA or recording test was performed in this pass.
+- Code gates passed: strict TypeScript, ESLint, 30 existing tests, architecture boundaries and formatting. Production exports for iOS, Android and web also passed. No build success is treated as physical capture-continuity evidence.
+- Public references: [Expo Router layouts](https://docs.expo.dev/router/basics/navigation-layouts/), [SwiftUI List](https://developer.apple.com/documentation/swiftui/list), [Material Card](https://developer.android.com/develop/ui/compose/components/card). No dependency was added or upgraded.
+
 ### Native device-list refinement
 
 - Monitor now starts with a SwiftUI grouped List on iOS or Material LazyColumn/ListItem rows on Android. A native toolbar + on iOS and floating + on Android open a separate Add camera sheet. Refresh and connection settings live in the native overflow menu.

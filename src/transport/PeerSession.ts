@@ -42,8 +42,14 @@ export class PeerSession {
   private lastPingAt = 0;
   private lastPong: { rtt: number; time: number } | null = null;
   private pingStalled = false;
+  private metricsEnabled: boolean;
+  private metricsReady = false;
 
-  constructor(private readonly callbacks: PeerCallbacks) {
+  constructor(
+    private readonly callbacks: PeerCallbacks,
+    options: { metrics?: boolean } = {},
+  ) {
+    this.metricsEnabled = options.metrics ?? true;
     this.peer.addEventListener('connectionstatechange', () => {
       if (this.abort.signal.aborted) return;
       callbacks.status(
@@ -263,13 +269,31 @@ export class PeerSession {
 
   private startMetrics() {
     this.assertActive();
+    this.metricsReady = true;
+    if (!this.metricsEnabled || this.metricsTimer) return;
+    void this.readMetrics();
     this.metricsTimer = setInterval(() => {
       void this.readMetrics();
-    }, 1000);
+    }, 2000);
+  }
+
+  setMetricsEnabled(enabled: boolean) {
+    this.metricsEnabled = enabled;
+    if (enabled && this.metricsReady && !this.abort.signal.aborted) this.startMetrics();
+    if (!enabled) {
+      if (this.metricsTimer) clearInterval(this.metricsTimer);
+      this.metricsTimer = null;
+      this.pendingPing = null;
+      this.lastPackets = null;
+      this.lastStats = null;
+      this.lastPong = null;
+      this.pingStalled = false;
+      this.callbacks.quality?.(null);
+    }
   }
 
   private async readMetrics() {
-    if (this.statsBusy || this.abort.signal.aborted) return;
+    if (!this.metricsEnabled || this.statsBusy || this.abort.signal.aborted) return;
     const now = performance.now();
     const pingTimedOut = !!this.pendingPing && now - this.pendingPing.start > 4000;
     if (pingTimedOut) {
@@ -280,7 +304,7 @@ export class PeerSession {
     this.statsBusy = true;
     try {
       const report: Map<string, Record<string, unknown>> = await this.peer.getStats();
-      if (this.abort.signal.aborted) return;
+      if (!this.metricsEnabled || this.abort.signal.aborted) return;
       const sample: LinkSample = {
         rtt: this.pingStalled
           ? 4000
@@ -343,6 +367,8 @@ export class PeerSession {
     this.assertActive();
     const report: Map<string, Record<string, unknown>> = await this.peer.getStats();
     return {
+      metricsEnabled: this.metricsEnabled,
+      metricsActive: this.metricsTimer !== null,
       connectionState: this.peer.connectionState,
       iceConnectionState: this.peer.iceConnectionState,
       reports: Array.from(report.values()),

@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { requireNativeModule, requireNativeView } from 'expo';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, type ViewProps } from 'react-native';
 import NativeEngine from '../../modules/relais-camera-engine/src';
-import { emptyCaptureState, parseCaptureState } from '@/capture/protocol';
-import { useConnection } from '@/capture/useConnection';
-import { CameraConnection } from '@/components/connection/CameraConnection';
+import { parseCaptureState } from '@/capture/protocol';
+import { useCaptureSession } from '@/capture/SessionContext';
 
 const AppleCamera = requireNativeView<
   ViewProps & {
@@ -15,13 +14,12 @@ const AppleCamera = requireNativeView<
     onMonitor: () => void;
     onCameraState: (event: { nativeEvent: unknown }) => void;
     connectionLabel: string;
+    keepSessionAlive: boolean;
   }
 >('RelaisCameraEngine');
 
 export default function CameraScreen() {
-  const [state, setState] = useState(emptyCaptureState);
-  const [connect, setConnect] = useState(false);
-  const connection = useConnection('camera', { state, perform: NativeEngine.captureAction });
+  const { connection, updateCamera } = useCaptureSession();
   useEffect(() => {
     if (!__DEV__) return;
     const runtime = globalThis as typeof globalThis & {
@@ -39,12 +37,13 @@ export default function CameraScreen() {
       <StatusBar style="light" />
       <AppleCamera
         style={styles.camera}
+        keepSessionAlive={connection.focused}
         onClose={() => router.back()}
         onMonitor={() => router.replace('/monitor')}
-        onConnect={() => setConnect(true)}
+        onConnect={() => router.push('/camera/connect')}
         onCameraState={({ nativeEvent }) => {
           const next = parseCaptureState(nativeEvent);
-          if (next) setState(next);
+          if (next) updateCamera(next, NativeEngine.captureAction);
         }}
         connectionLabel={
           connection.connected
@@ -53,11 +52,6 @@ export default function CameraScreen() {
               ? 'Ready to connect'
               : 'Connect a monitor'
         }
-      />
-      <CameraConnection
-        connection={connection}
-        visible={connect}
-        onClose={() => setConnect(false)}
       />
     </>
   );

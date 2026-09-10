@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import { deviceRegistry } from './storage';
 import { findDevice } from './presence';
@@ -10,8 +10,12 @@ export interface DeviceRow {
   availability: DeviceAvailability;
   descriptor: PairingDescriptor | null;
 }
-export function useDevices(server: string, visible: boolean) {
-  const devices = useSyncExternalStore(deviceRegistry.subscribe, deviceRegistry.getSnapshot);
+export function useDevices(server: string, visible: boolean, deviceId?: string) {
+  const saved = useSyncExternalStore(deviceRegistry.subscribe, deviceRegistry.getSnapshot);
+  const devices = useMemo(
+    () => (deviceId ? saved.filter((device) => device.id === deviceId) : saved),
+    [saved, deviceId],
+  );
   const [error, setError] = useState('');
   const [snapshot, setSnapshot] = useState<{
     rows: Record<string, DeviceRow>;

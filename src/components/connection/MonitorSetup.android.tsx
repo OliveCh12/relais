@@ -3,7 +3,12 @@ import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  Box,
+  Card,
   Column,
+  Icon,
+  Shape,
+  Surface,
   DropdownMenu,
   DropdownMenuItem,
   FloatingActionButton,
@@ -22,6 +27,7 @@ import {
   paddingAll,
   size,
 } from '@expo/ui/jetpack-compose/modifiers';
+import chevron from '@expo/material-symbols/chevron_right.xml';
 import { availabilityLabels } from '@/connections/model';
 import { NativeIcon } from '../icons/Icon.android';
 import type { MonitorSetupProps } from './MonitorSetup.types';
@@ -74,7 +80,7 @@ export function MonitorSetup(props: MonitorSetupProps) {
       <Host style={{ flex: 1 }}>
         <LazyColumn
           modifiers={[fillMaxSize()]}
-          contentPadding={{ top: 16, bottom: insets.bottom + 100 }}
+          contentPadding={{ top: 16, start: 16, end: 16, bottom: insets.bottom + 100 }}
         >
           {props.connecting && (
             <ListItem>
@@ -101,35 +107,55 @@ export function MonitorSetup(props: MonitorSetupProps) {
               <Text color={colors.onSurfaceVariant}>Tap + to connect another phone.</Text>
             </Column>
           )}
-          {props.rows.map((row) => (
-            <ListItem
-              key={row.device.id}
-              modifiers={[
-                clickable(() => {
-                  if (!props.connecting) props.onSelect(row);
-                }),
-              ]}
-            >
-              <ListItem.LeadingContent>
-                <NativeIcon name="device" color={colors.onSurfaceVariant} />
-              </ListItem.LeadingContent>
-              <ListItem.HeadlineContent>
-                <Text>{row.device.name}</Text>
-              </ListItem.HeadlineContent>
-              <ListItem.SupportingContent>
-                <Text>{availabilityLabels[row.availability]}</Text>
-              </ListItem.SupportingContent>
-              <ListItem.TrailingContent>
-                <IconButton onClick={() => props.onDetails(row)}>
-                  <NativeIcon
-                    name="info"
-                    label={`Details for ${row.device.name}`}
-                    color={colors.onSurfaceVariant}
-                  />
-                </IconButton>
-              </ListItem.TrailingContent>
-            </ListItem>
-          ))}
+          {props.rows.length > 0 && (
+            <Card>
+              <Column>
+                {props.rows.map((row) => (
+                  <ListItem
+                    key={row.device.id}
+                    colors={{ containerColor: 'transparent' }}
+                    modifiers={[
+                      clickable(() => {
+                        if (!props.connecting) props.onSelect(row);
+                      }),
+                    ]}
+                  >
+                    <ListItem.LeadingContent>
+                      <Surface
+                        shape={Shape.Circle({ radius: 1 })}
+                        color={
+                          row.availability === 'available'
+                            ? colors.primaryContainer
+                            : colors.surfaceContainerHighest
+                        }
+                        modifiers={[size(40, 40)]}
+                      >
+                        <Box contentAlignment="center" modifiers={[size(40, 40)]}>
+                          <NativeIcon
+                            name="device"
+                            color={
+                              row.availability === 'available'
+                                ? colors.onPrimaryContainer
+                                : colors.onSurfaceVariant
+                            }
+                          />
+                        </Box>
+                      </Surface>
+                    </ListItem.LeadingContent>
+                    <ListItem.HeadlineContent>
+                      <Text>{row.device.name}</Text>
+                    </ListItem.HeadlineContent>
+                    <ListItem.SupportingContent>
+                      <Text>{availabilityLabels[row.availability]}</Text>
+                    </ListItem.SupportingContent>
+                    <ListItem.TrailingContent>
+                      <Icon source={chevron} size={20} tint={colors.onSurfaceVariant} />
+                    </ListItem.TrailingContent>
+                  </ListItem>
+                ))}
+              </Column>
+            </Card>
+          )}
           <Text
             color={colors.onSurfaceVariant}
             style={{ typography: 'bodySmall' }}

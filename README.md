@@ -8,10 +8,10 @@ This is a development prototype. **Photo capture, native video recording and rem
 
 - **Camera:** Photo and Video, native viewfinder, compatible video resolution/frame-rate/HDR settings, automatic focus/exposure/color/stabilization, zoom, camera switching and grid. Originals are saved on this phone through PhotoKit/MediaStore.
 - **iPhone Cinematic capture:** Apple's public iOS 26 APIs on supported native formats. No custom depth effect or manual focus controls.
-- **Monitor:** full-width native live preview, remote photo shutter and video start/stop, Camera state, remembered devices and measured connection quality.
+- **Monitor:** native saved-camera list, full-width live preview, remote photo shutter and video start/stop. Device management and connection Info use native stack pages.
 - **Native interaction:** SwiftUI navigation, Forms, segmented pickers, SF Symbols and sheets on iOS; Material lists, segmented controls, sheets and symbols on Android. Web retains separate scaffolds.
 
-Open **Camera** on one phone and **Monitor** on the other. For a first connection, tap Camera's code button, then **+ → Scan code** (or **Enter code**) in Monitor. Monitor lists remembered cameras; the information button opens device details. Both apps must stay open on the same Wi-Fi network. A single available saved camera reconnects automatically. Returning from the preview keeps the list open until you choose a camera.
+Open **Camera** on one phone and **Monitor** on the other. For a first connection, tap Camera's code button, then **+ → Scan code** (or **Enter code**) in Monitor. Tap any saved-camera row to open its page, then **Connect**. Both apps must stay open on the same Wi-Fi network. The list keeps online/offline availability; signal measurements and technical details appear only on **Info**. Returning from the preview keeps the list open until you choose a camera.
 
 Choose **Photo** or **Video**, then use the shutter on either phone. Monitor waits for Camera state before displaying recording. Captures are reported saved only after gallery confirmation. Failed imports retain the private original for retry. Closing Monitor or losing Wi-Fi does not stop a local recording.
 

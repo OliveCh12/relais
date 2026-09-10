@@ -16,12 +16,6 @@ export default function RootLayout() {
   }, []);
   const theme = useAppTheme();
   const base = theme.dark ? DarkTheme : DefaultTheme;
-  const captureOptions = {
-    headerStyle: { backgroundColor: '#000000' },
-    headerTintColor: '#FFFFFF',
-    headerTitleStyle: { color: '#FFFFFF' },
-    contentStyle: { backgroundColor: '#000000' },
-  };
   return (
     <ThemeProvider
       value={{
@@ -49,8 +43,9 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="pairing" options={{ title: 'Pair phones' }} />
-        <Stack.Screen name="camera" options={{ title: 'Camera', ...captureOptions }} />
-        <Stack.Screen name="monitor" options={{ title: 'Monitor' }} />
+        <Stack.Screen name="camera" options={{ headerShown: false }} />
+        <Stack.Screen name="monitor" options={{ headerShown: false }} />
+        <Stack.Screen name="about" options={{ title: 'About Relais' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
         <Stack.Screen name="dev/webrtc" options={{ title: 'Live preview', headerShown: false }} />
       </Stack>
