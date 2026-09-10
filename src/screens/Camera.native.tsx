@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   BackHandler,
@@ -8,7 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useFocusEffect, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -21,9 +21,16 @@ import { CameraOptions } from '@/components/CameraOptions';
 import { ActionButton } from '@/components/ActionButton';
 import { CameraZoom } from '@/components/CameraZoom';
 
+function act(action: () => Promise<unknown>) {
+  void action().catch((error: unknown) =>
+    Alert.alert('Camera', error instanceof Error ? error.message : 'Try again in a moment.'),
+  );
+}
+
 export default function CameraScreen() {
   useKeepAwake();
-  const engine = useLocalCameraEngine();
+  const isFocused = useIsFocused();
+  const engine = useLocalCameraEngine(isFocused);
   const [settings, setSettings] = useState(false);
   const [grid, setGrid] = useState(false);
   const insets = useSafeAreaInsets();
@@ -31,13 +38,9 @@ export default function CameraScreen() {
   const landscape = window.width > window.height;
   const recording = engine.recording.phase === 'recording';
   const transitioning = engine.busy && !recording;
-  const act = (action: () => Promise<unknown>) => {
-    void action().catch((error: unknown) =>
-      Alert.alert('Camera', error instanceof Error ? error.message : 'Try again in a moment.'),
-    );
-  };
-  const close = () => {
-    if (!engine.busy) {
+  const { busy, stop } = engine;
+  const close = useCallback(() => {
+    if (!busy) {
       router.back();
       return;
     }
@@ -47,19 +50,22 @@ export default function CameraScreen() {
         text: 'Finish',
         onPress: () =>
           act(async () => {
-            await engine.stop();
+            await stop();
             router.back();
           }),
       },
     ]);
-  };
-  useEffect(() => {
-    const listener = BackHandler.addEventListener('hardwareBackPress', () => {
-      close();
-      return true;
-    });
-    return () => listener.remove();
-  });
+  }, [busy, stop]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!engine.busy) return;
+      const listener = BackHandler.addEventListener('hardwareBackPress', () => {
+        close();
+        return true;
+      });
+      return () => listener.remove();
+    }, [engine.busy, close]),
+  );
 
   return (
     <View style={styles.screen}>
@@ -237,7 +243,7 @@ function RecordingClock({ startedAt }: { startedAt: number | null }) {
     return () => clearInterval(timer);
   }, [startedAt]);
   return (
-    <Text accessibilityLabel={`Recording, ${seconds} secondes`} style={styles.timer}>
+    <Text accessibilityLabel={`Recording, ${seconds} seconds`} style={styles.timer}>
       {String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}
     </Text>
   );

@@ -14,13 +14,16 @@ import NativeEngine, { type RecordingProfile } from './index';
 import { RecordingController } from './RecordingController';
 import { closestRecordingProfile, recordingResolutionLabel } from './recordingProfiles';
 
-export function useLocalCameraEngine() {
+export function useLocalCameraEngine(isFocused: boolean) {
   const [enabled, setEnabled] = useState(
     () =>
       VisionCamera.cameraPermissionStatus === 'authorized' &&
       VisionCamera.microphonePermissionStatus !== 'not-determined',
   );
-  const [foreground, setForeground] = useState(AppState.currentState !== 'background');
+  const [foreground, setForeground] = useState(isFocused && AppState.currentState === 'active');
+  const visibilityGeneration = useRef(0);
+  const screenGeneration = useRef(0);
+  const visibleRef = useRef(isFocused);
   const [position, setPosition] = useState<'back' | 'front'>('back');
   const [audio, setAudio] = useState(
     () => VisionCamera.microphonePermissionStatus === 'authorized',
@@ -97,6 +100,7 @@ export function useLocalCameraEngine() {
     () => new RecordingController((path) => NativeEngine.saveVideoToLibrary(path)),
   );
   const recording = useSyncExternalStore(recorder.subscribe, recorder.getSnapshot);
+  const stop = useCallback(() => recorder.stop(), [recorder]);
   const busy =
     recovering || ['starting', 'recording', 'stopping', 'saving'].includes(recording.phase);
   const updateReady = useCallback((value: boolean) => {
@@ -105,6 +109,7 @@ export function useLocalCameraEngine() {
   }, []);
   const reportError = useCallback(
     (failure: Error) => {
+      runningRef.current = false;
       updateReady(false);
       setError(failure.message);
     },
@@ -134,35 +139,59 @@ export function useLocalCameraEngine() {
   };
 
   useEffect(() => {
-    const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'background') {
-        readyRef.current = false;
+    let current = true;
+    visibleRef.current = isFocused;
+    const updateVisibility = () => {
+      if (!isFocused || AppState.currentState !== 'active') {
+        visibilityGeneration.current += 1;
+        updateReady(false);
         void recorder
-          .stop()
-          .then(() => setForeground(AppState.currentState === 'active'))
-          .catch(() => setError('Tap the red button to finish recording.'));
-      } else if (state === 'active') setForeground(true);
-    });
+          .stopCapture()
+          .catch(() => {
+            if (current) setError('Recording interrupted. Reopen Camera to continue.');
+          })
+          .finally(() => {
+            if (current) setForeground(isFocused && AppState.currentState === 'active');
+          });
+      } else {
+        setForeground(true);
+        updateReady(runningRef.current);
+      }
+    };
+    const listener = AppState.addEventListener('change', updateVisibility);
+    updateVisibility();
     return () => {
+      current = false;
+      visibleRef.current = false;
+      visibilityGeneration.current += 1;
+      screenGeneration.current += 1;
       listener.remove();
       readyRef.current = false;
-      void recorder.stop().catch(() => {});
+      void recorder.stopCapture().catch(() => {});
     };
-  }, [recorder]);
+  }, [isFocused, recorder, updateReady]);
 
   const open = async () => {
+    const request = screenGeneration.current;
     setError('');
-    if (!(await VisionCamera.requestCameraPermission())) {
+    const granted = await VisionCamera.requestCameraPermission();
+    if (!visibleRef.current || request !== screenGeneration.current) return;
+    if (!granted) {
       setError('Allow camera access in your phone’s settings.');
       return;
     }
-    setAudio(await VisionCamera.requestMicrophonePermission());
+    const audio = await VisionCamera.requestMicrophonePermission();
+    if (!visibleRef.current || request !== screenGeneration.current) return;
+    setAudio(audio);
     setEnabled(true);
   };
 
   const setMicrophone = async (value: boolean) => {
     if (busy || value === audio) return;
-    if (value && !(await VisionCamera.requestMicrophonePermission())) {
+    const request = screenGeneration.current;
+    const granted = !value || (await VisionCamera.requestMicrophonePermission());
+    if (!visibleRef.current || request !== screenGeneration.current) return;
+    if (!granted) {
       setError('Allow microphone access in your phone’s settings to record audio.');
       return;
     }
@@ -171,14 +200,17 @@ export function useLocalCameraEngine() {
     setAudio(value);
   };
 
-  const start = () =>
-    recorder.start(async () => {
+  const start = () => {
+    const request = visibilityGeneration.current;
+    return recorder.start(async () => {
       if (!readyRef.current) throw new Error('Wait for the camera to be ready.');
       const path = await NativeEngine.createRecordingPath();
       const nativeRecorder = await output.createRecorder({ filePath: path });
-      if (!readyRef.current) throw new Error('Camera interrupted. Try again.');
+      if (!readyRef.current || request !== visibilityGeneration.current)
+        throw new Error('Camera interrupted. Try again.');
       return nativeRecorder;
     });
+  };
 
   const flip = () => {
     if (busy || !alternate) return;
@@ -199,7 +231,7 @@ export function useLocalCameraEngine() {
         ? `${recordingResolutionLabel(Math.min(resolution.width, resolution.height))}${selectedFPS.current ? ` · ${selectedFPS.current} fps` : ''}${selectedHDR.current ? ' · HDR' : ''}`
         : 'Automatic quality',
     );
-    updateReady(runningRef.current);
+    updateReady(runningRef.current && visibleRef.current && AppState.currentState === 'active');
   }, [output, updateReady]);
 
   return {
@@ -248,7 +280,7 @@ export function useLocalCameraEngine() {
     setMicrophone,
     flip,
     start,
-    stop: () => recorder.stop(),
+    stop,
     retrySave: () => recorder.retrySave(),
     setTorch: () => {
       if (device?.hasTorch) setTorch((value) => !value);

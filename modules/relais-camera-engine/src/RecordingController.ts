@@ -23,6 +23,8 @@ export class RecordingController {
   private listeners = new Set<() => void>();
   private recorder: NativeRecorder | null = null;
   private starting: Promise<void> | null = null;
+  private finalization: Promise<void> = Promise.resolve();
+  private finalized: () => void = () => {};
   private completion: Promise<void> = Promise.resolve();
   private complete: () => void = () => {};
 
@@ -46,6 +48,9 @@ export class RecordingController {
     this.update({ phase: 'starting', message: 'Preparing…', startedAt: null, pendingPath: null });
     this.completion = new Promise((resolve) => {
       this.complete = resolve;
+    });
+    this.finalization = new Promise((resolve) => {
+      this.finalized = resolve;
     });
     this.starting = this.begin(create);
     return this.starting;
@@ -75,6 +80,7 @@ export class RecordingController {
       startedAt: null,
       message: error instanceof Error ? error.message : 'Recording interrupted.',
     });
+    this.finalized();
     this.complete();
   }
 
@@ -86,6 +92,7 @@ export class RecordingController {
       pendingPath: path,
       message: 'Adding to gallery…',
     });
+    this.finalized();
     try {
       await this.save(path);
       this.update({ phase: 'saved', pendingPath: null, message: 'Video added to gallery' });
@@ -102,17 +109,24 @@ export class RecordingController {
     }
   }
 
-  async stop(): Promise<void> {
+  async stopCapture(): Promise<void> {
     await this.starting;
     if (this.state.phase === 'recording' && this.recorder) {
       this.update({ phase: 'stopping', message: 'Finishing recording…' });
       try {
         await this.recorder.stopRecording();
       } catch (error) {
-        this.update({ phase: 'recording', message: 'Could not stop recording. Try again.' });
-        throw error;
+        if (this.getSnapshot().phase === 'stopping') {
+          this.update({ phase: 'recording', message: 'Could not stop recording. Try again.' });
+          throw error;
+        }
       }
     }
+    await this.finalization;
+  }
+
+  async stop(): Promise<void> {
+    await this.stopCapture();
     await this.completion;
   }
 

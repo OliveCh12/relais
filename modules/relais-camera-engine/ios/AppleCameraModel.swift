@@ -13,10 +13,14 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   private var captureSettings = AppleCaptureSettings()
   private var finishing = false
   private var stopAfterStart = false
-  private var backgrounded = false
+  private var backgrounded = true
   private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
   private var closeAfterSave = false
   private var previousIdleTimer = false
+  private var visible = false
+  private var closing = false
+  private var generation = 0
+  private var requestingPermission = false
 
   @Published private(set) var settings = AppleCaptureSettings()
   @Published private(set) var profiles: [AppleCaptureProfile] = []
@@ -41,6 +45,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   @Published private(set) var focusLocked = false
   @Published private(set) var pending: [String] = []
   @Published private(set) var stabilizationActive = false
+  @Published private(set) var stabilizationSupported = false
   @Published private(set) var activeDevice: AVCaptureDevice?
   @Published var showSettings = false
   var onClose: (() -> Void)?
@@ -54,7 +59,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
         self?.suspend()
       },
-      center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+      center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
         self?.resume()
       },
       center.addObserver(forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main) { [weak self] _ in
@@ -75,26 +80,37 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
   func appear() {
+    guard !visible else { return }
+    visible = true
+    closing = false
     previousIdleTimer = UIApplication.shared.isIdleTimerDisabled
     UIApplication.shared.isIdleTimerDisabled = true
     refreshPending()
-    if authorized { resume() }
+    resume()
   }
 
   func disappear() {
+    guard visible else { return }
+    visible = false
     UIApplication.shared.isIdleTimerDisabled = previousIdleTimer
     suspend()
   }
 
   func requestAccess() {
+    guard visible, !requestingPermission else { return }
+    requestingPermission = true
+    let request = generation
     Task { @MainActor in
+      defer { requestingPermission = false; if !ready { resume() } }
       let granted = await AVCaptureDevice.requestAccess(for: .video)
+      guard visible, !closing, generation == request else { return }
       authorized = granted
       guard granted else {
         message = "Allow camera access in Settings to record."
         return
       }
       let audio = await AVCaptureDevice.requestAccess(for: .audio)
+      guard visible, !closing, generation == request else { return }
       var desired = settings
       desired.audio = audio
       configure(desired)
@@ -112,9 +128,13 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   func setAudio(_ enabled: Bool) {
-    guard !busy, !configuring else { return }
+    guard visible, !busy, !configuring, !requestingPermission else { return }
+    requestingPermission = true
+    let request = generation
     Task { @MainActor in
+      defer { requestingPermission = false; if !ready { resume() } }
       let granted = enabled ? await AVCaptureDevice.requestAccess(for: .audio) : true
+      guard visible, !closing, generation == request else { return }
       if !granted {
         message = "Allow microphone access in Settings to record audio."
         return
@@ -124,22 +144,37 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   private func configure(_ desired: AppleCaptureSettings) {
-    guard authorized, !busy, !configuring else { return }
+    guard canUseCamera, authorized, !busy, !configuring else { return }
+    let request = generation
     configuring = true
     ready = false
     message = ""
     queue.async {
-      do { try self.configureSession(desired) }
+      self.backgrounded = false
+      do { try self.configureSession(desired, generation: request) }
       catch {
+        self.session.stopRunning()
+        self.session.beginConfiguration()
+        self.session.inputs.forEach(self.session.removeInput)
+        self.session.outputs.forEach(self.session.removeOutput)
+        self.session.commitConfiguration()
+        self.input = nil
+        self.metadata = nil
+        self.lightObservation = nil
         DispatchQueue.main.async {
+          guard self.generation == request, self.visible, !self.closing else { return }
           self.configuring = false
+          self.activeDevice = nil
+          self.profiles = []
+          self.stabilizationSupported = false
+          self.stabilizationActive = false
           self.message = error.localizedDescription
         }
       }
     }
   }
 
-  private func configureSession(_ requested: AppleCaptureSettings) throws {
+  private func configureSession(_ requested: AppleCaptureSettings, generation request: Int) throws {
     let candidates = AppleCaptureCatalog.devices(front: requested.front)
     let cinematicSupported = candidates.contains {
       !AppleCaptureCatalog.profiles(for: $0, cinematic: true).isEmpty
@@ -219,7 +254,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
           connection.preferredVideoStabilizationMode = .cinematicExtendedEnhanced
         } else { connection.preferredVideoStabilizationMode = .auto }
       } else { connection.preferredVideoStabilizationMode = .off }
-    }
+    } else { selected.stabilization = false }
     let codec: AVVideoCodecType = movie.availableVideoCodecTypes.contains(.hevc) ? .hevc : .h264
     guard !selected.hdr || codec == .hevc else { throw CaptureFailure("HDR requires the HEVC encoder on this camera.") }
     movie.setOutputSettings([AVVideoCodecKey: codec], for: connection)
@@ -228,8 +263,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     captureSettings = selected
     if !backgrounded && !session.isRunning { session.startRunning() }
 
-    let multiplier: CGFloat
-    if #available(iOS 18.0, *) { multiplier = device.displayVideoZoomFactorMultiplier } else { multiplier = device.deviceType == .builtInTripleCamera || device.deviceType == .builtInDualWideCamera ? 0.5 : 1 }
+    let multiplier = displayZoomMultiplier(for: device)
     let lower = device.minAvailableVideoZoomFactor * multiplier
     let upper = device.maxAvailableVideoZoomFactor * multiplier
     let zoomStops = ([lower, 1, 2] + device.virtualDeviceSwitchOverVideoZoomFactors.map { $0.doubleValue * multiplier })
@@ -241,18 +275,24 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     if #available(iOS 26.0, *), selected.cinematic {
       lightObservation = device.observe(\.cinematicVideoCaptureSceneMonitoringStatuses, options: [.initial, .new]) { [weak self] device, _ in
         let insufficient = !device.cinematicVideoCaptureSceneMonitoringStatuses.isEmpty
-        DispatchQueue.main.async { self?.lowLight = insufficient }
+        DispatchQueue.main.async {
+          guard let self, self.generation == request, self.visible, !self.closing else { return }
+          self.lowLight = insufficient
+        }
       }
     }
     let running = session.isRunning && !session.isInterrupted
     let stable = connection.activeVideoStabilizationMode != .off
+    let supportsStabilization = connection.isVideoStabilizationSupported
+    let displayZoom = device.videoZoomFactor * multiplier
     DispatchQueue.main.async {
+      guard self.generation == request, self.visible, !self.closing else { return }
       self.settings = selected
       self.activeDevice = device
       self.profiles = allProfiles
       self.cinematicSupported = cinematicSupported
       self.configuring = false
-      self.ready = running
+      self.ready = running && self.canUseCamera
       self.torchAvailable = device.hasTorch
       self.torch = false
       self.focusLocked = false
@@ -261,9 +301,10 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       self.minZoom = lower
       self.maxZoom = upper
       self.zoomStops = Array(Set(zoomStops)).sorted()
-      self.zoom = device.videoZoomFactor * multiplier
+      self.zoom = displayZoom
       self.stabilizationActive = stable
-      self.lowLight = false
+      self.stabilizationSupported = supportsStabilization
+      if !selected.cinematic { self.lowLight = false }
       if #available(iOS 26.0, *), selected.cinematic {
         self.aperture = Double(profile.format.defaultSimulatedAperture)
         self.apertureRange = Double(profile.format.minSimulatedAperture)...Double(profile.format.maxSimulatedAperture)
@@ -314,14 +355,18 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       guard let device = self.input?.device else { return }
       do {
         try device.lockForConfiguration()
-        let multiplier: CGFloat
-        if #available(iOS 18.0, *) { multiplier = device.displayVideoZoomFactorMultiplier } else { multiplier = 1 }
+        let multiplier = self.displayZoomMultiplier(for: device)
         let value = min(device.maxAvailableVideoZoomFactor, max(device.minAvailableVideoZoomFactor, displayValue / multiplier))
         device.videoZoomFactor = value
         device.unlockForConfiguration()
         DispatchQueue.main.async { self.zoom = value * multiplier }
       } catch { self.report(error) }
     }
+  }
+
+  private func displayZoomMultiplier(for device: AVCaptureDevice) -> CGFloat {
+    if #available(iOS 18.0, *) { return device.displayVideoZoomFactorMultiplier }
+    return device.deviceType == .builtInTripleCamera || device.deviceType == .builtInDualWideCamera ? 0.5 : 1
   }
 
   func focus(at point: CGPoint, locked: Bool) {
@@ -349,7 +394,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   func resetFocus() { focus(at: CGPoint(x: 0.5, y: 0.5), locked: false) }
 
   func record(rotation: CGFloat) {
-    guard ready, !busy, !configuring else { return }
+    guard canUseCamera, ready, !busy, !configuring else { return }
     phase = "starting"
     message = ""
     queue.async {
@@ -385,7 +430,11 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     queue.async {
       if self.stopAfterStart || self.backgrounded { self.movie.stopRecording() }
       else {
-        DispatchQueue.main.async { self.startedAt = Date(); self.phase = "recording" }
+        DispatchQueue.main.async {
+          guard self.phase == "starting" else { return }
+          self.startedAt = Date()
+          self.phase = "recording"
+        }
       }
     }
   }
@@ -431,18 +480,24 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     refreshPending()
     endBackgroundTask()
     completeClose()
-    if UIApplication.shared.applicationState == .active && !ready { resume() }
+    if !ready { resume() }
   }
 
   func requestClose() {
     if busy {
       closeAfterSave = true
       stopRecording()
-    } else { onClose?() }
+    } else { close() }
   }
 
   private func completeClose() {
-    if closeAfterSave { closeAfterSave = false; onClose?() }
+    if closeAfterSave { closeAfterSave = false; close() }
+  }
+
+  private func close() {
+    closing = true
+    suspend()
+    onClose?()
   }
 
   private func refreshPending() {
@@ -454,6 +509,8 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   private func suspend() {
+    generation += 1
+    configuring = false
     ready = false
     if busy, backgroundTask == .invalid {
       backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Finalize Relais video") { [weak self] in self?.endBackgroundTask() }
@@ -466,9 +523,13 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   private func resume() {
-    guard authorized else { return }
-    queue.async { self.backgrounded = false }
+    guard canUseCamera, !ready, !requestingPermission else { return }
+    authorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
     if !busy { configure(settings) }
+  }
+
+  private var canUseCamera: Bool {
+    visible && !closing && UIApplication.shared.applicationState == .active
   }
 
   private func endBackgroundTask() {

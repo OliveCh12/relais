@@ -2,6 +2,8 @@
 
 Research began September 9, 2026. The requirement is to use real Apple/Google controls and camera-app conventions. SwiftUI/Compose controls, native icons, a fixed viewfinder and shared settings logic were introduced that day. This document separates the current journey from the historical audit. Exact build/device evidence is in STATUS.md.
 
+For new component work, consult the [native components and interaction-performance reference](research/native-components-and-performance.md), checked against official documentation and the installed packages on September 10. It distinguishes current bindings from newer SDK APIs, documents native state and sheet lifecycles, and maps each Relais interaction to the appropriate platform control. The [code audit](research/native-code-audit-2026-09-10.md) contains the ordered implementation backlog.
+
 ## Current journey — September 10
 
 | Surface                   | iPhone                                                             | Android                                                                       |
@@ -13,7 +15,7 @@ Research began September 9, 2026. The requirement is to use real Apple/Google co
 | QR and options            | Expandable medium/large SwiftUI sheet; large sheet for readable QR | Content-sized, scrollable Material ModalBottomSheet                           |
 | Manual code / Mac address | Native TextField in a dedicated sheet                              | Native OutlinedTextField in a dedicated sheet                                 |
 
-Home → **Camera** records locally. Home → **Monitor** opens remembered devices, QR scanning and test video sharing. The duplicate device-list entry was removed. Mac setup and manual code entry live in secondary options.
+Home → **Camera** records locally. In development builds, Home → **Monitor** opens remembered devices, QR scanning and test video sharing. Release Monitor still enters the explicit demo pairing/fixture flow; the real product transport is not connected yet. The duplicate device-list entry was removed. Mac setup and manual code entry live in secondary options of the development flow.
 
 The QR sheet opens when sharing becomes available. Dismissing it retains the session and preview; an action reopens it. It closes when the link connects. Only one connection sheet is presented at a time. The scanner unmounts before joining. The QR itself is SVG hosted inside the native sheet; gestures, fields and buttons belong to the platform.
 
@@ -83,7 +85,7 @@ Use supported iOS Liquid Glass controls with system fallback; avoid covering the
 - Evaluate brief haptics carefully on the recording phone. AVAudioSession disables recording-time haptics/system sounds by default; do not promise them unconditionally.
 - Widgets, Live Activities and locked launch are separate post-foundation work, not decoration.
 
-Minimum touch targets: 44 × 44 pt on iPhone, 48 × 48 dp on Android; Record is larger. Native controls help but do not certify the whole screen. [Apple buttons](https://developer.apple.com/design/human-interface-guidelines/buttons), [Compose accessibility](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [predictive Back](https://developer.android.com/develop/ui/compose/system/predictive-back), [Camera Control](https://developer.apple.com/documentation/avfoundation/enhancing-your-app-experience-with-the-camera-control), [recording haptics](https://developer.apple.com/documentation/avfaudio/avaudiosession/allowhapticsandsystemsoundsduringrecording).
+Relais touch-target policy: at least 44 × 44 pt on iPhone and 48 × 48 dp on Android; Record is larger. The current Apple HIG distinguishes default and minimum control sizes; Relais retains the larger target for comfortable camera operation. Native controls help but do not certify the whole screen. [Apple accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility), [Compose accessibility](https://developer.android.com/develop/ui/compose/accessibility/api-defaults), [predictive Back](https://developer.android.com/develop/ui/compose/system/predictive-back), [Camera Control](https://developer.apple.com/documentation/avfoundation/enhancing-your-app-experience-with-the-camera-control), [recording haptics](https://developer.apple.com/documentation/avfaudio/avaudiosession/allowhapticsandsystemsoundsduringrecording).
 
 ## Versions and migration boundaries
 
@@ -109,6 +111,6 @@ Measure optimized builds on real phones: Home, sheets, rotation and Back, then t
 
 ## Simplification history
 
-The first native migration still had oversized promotional text, large capsules and repeated demo explanations. A second pass used compact role rows, modest system titles, concise descriptions and native About for version information. Camera/Monitor now have distinct entry points; QR/manual setup lives in native sheets rather than permanent viewfinder cards. The initial demo scanner journey is retained only as development history.
+The first native migration still had oversized promotional text, large capsules and repeated demo explanations. A second pass used compact role rows, modest system titles, concise descriptions and native About for version information. Camera/Monitor now have distinct entry points; QR/manual setup in the development connection flow lives in native sheets rather than permanent viewfinder cards. The release Monitor entry still reaches the explicit demo scanner/fixture journey until product transport is implemented; see the code audit.
 
 Native light/dark splash assets and an Android adaptive icon add no delay. Dev Client loading remains separate from production launch. Remembered-device pairing is now implemented, while autonomous discovery and a phone-hosted server remain unfinished. Never populate fake nearby devices or claim a connection without an actual service.

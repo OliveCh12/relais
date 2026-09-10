@@ -2,6 +2,17 @@
 
 **Native local capture and native mobile UI are implemented. Recording and remote preview remain separate flows.** On an iPhone 17 Pro, Video and Apple's Cinematic mode both opened at 4K HDR30. The hardware catalog exposed 4K120 profiles; that recording rate has not been validated. Complete recording, audio, orientation and gallery checks remain physical-device work.
 
+## Native lifecycle hardening
+
+- The [source audit](docs/research/native-code-audit-2026-09-10.md) and [native component reference](docs/research/native-components-and-performance.md) document the public APIs, installed versions and ordered follow-up work. No dependency or target-SDK upgrade was made.
+- iOS camera appearance is idempotent. Permission and configuration completions are checked against screen lifetime; foreground recovery waits for the active application. Closing invalidates pending configuration results, and finishing a gallery import cannot reopen a closed screen. A failed configuration stops and clears the capture graph, exposing an unavailable state instead of a partly configured camera.
+- iOS zoom buttons and pinch gestures share the same display-to-device conversion, including the pre-iOS-18 fallback. The SwiftUI stabilization toggle is disabled and explained when the selected connection does not support stabilization. Its value no longer advertises an unsupported request as enabled.
+- Android capture follows route focus and application activity. Camera release waits for native file finalization, independently of a slow or refused gallery import. The user-facing save operation still waits for gallery confirmation and retains the private file on failure. Stale permission results cannot reopen a hidden screen.
+- Android only intercepts Back while recording or saving, and only on the focused camera screen. Idle Back is left to the navigator. Existing SwiftUI/Compose controls and the one-owner native video boundary are preserved.
+- `pnpm check` passed with 26 tests, strict TypeScript, ESLint, architecture boundaries and formatting. Three added regressions cover delayed gallery import, failed native startup and retrying a failed stop. These are controller tests, not physical-camera validation.
+- Final iPhone and ARM64 Simulator builds passed, including `codesign --verify --deep --strict`. Android ARM64 `assembleDebug` passed in 5 min 16 s (600 tasks). All three apps were installed and opened; the Android process and Metro were confirmed running. Metro on 8087 and signaling on 8787 remain available for owner testing. TypeScript, the changed Android hook's lint check and formatting also passed after the final lifecycle adjustments.
+- This is the first lifecycle/settings slice, not completion of the audit backlog. iOS interactive Back, the iOS 16.4 orientation fallback, simultaneous recording/streaming and O20 remain open. Visual QA, file playback, gallery behavior and background transitions on physical phones are left for owner testing.
+
 ## English publication pass
 
 - Documentation, app-owned interface text, accessibility labels, native permission descriptions, errors and source comments are in English. User-defined device names and protocol identifiers are preserved. Historical audit screenshots retain their original labels.
@@ -88,6 +99,7 @@ An earlier iPhone → Simulator sample received H.264 1280 × 720 at 30 fps, wit
 - Mise pins JDK 17; Android Studio's JBR 25 previously failed CMake.
 - Xcode is selected per process, without changing global `xcode-select`.
 - Hermes `250829098.0.17` archive URLs returned 404 at validation time. Source builds use `hermes-v250829098.0.17`, revision `3477757eb2475555cf8d8df24bfb1deb0613880d`.
+- iPhone and Simulator source builds must run sequentially. Their separate DerivedData directories still share the Hermes `destroot`; concurrent builds produced an iOS library at Simulator link time during this pass.
 - `buildReactNativeFromSource: true` and `usePrecompiledModules: false` avoid precompiled Expo modules expecting React.framework. Keep the native cache for incremental builds.
 - Metro resolves Worklets, Reanimated and Nitro through root dependencies. This avoids the previous JS 0.10.1/0.12.2 Worklets duplication against the 0.10.1 native binary (`valueUnpacker not found`).
 - Exact versions and the lockfile are retained. CameraX and Material alpha versions, WebRTC New Architecture compatibility and target-SDK permission changes still require device validation.

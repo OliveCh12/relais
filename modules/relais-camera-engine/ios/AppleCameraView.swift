@@ -273,6 +273,9 @@ private struct AppleCameraScreen: View {
           }.disabled(!hdrSupported)
           Toggle(isOn: Binding(get: { model.settings.stabilization }, set: { value in model.change { $0.stabilization = value } })) {
             Label("Automatic stabilization", systemImage: "hand.raised")
+          }.disabled(!model.stabilizationSupported)
+          if !model.stabilizationSupported {
+            Text("Stabilization is unavailable with these camera settings.").font(.footnote).foregroundStyle(.secondary)
           }
           Toggle(isOn: Binding(get: { model.settings.audio }, set: model.setAudio)) { Label("Record audio", systemImage: "mic") }
         } header: { Text("Recording") } footer: {

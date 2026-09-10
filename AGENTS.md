@@ -17,5 +17,6 @@
 - Remote capabilities belong to the Camera phone, not the Monitor. Label fixtures until the real exchange is connected.
 - Do not upgrade Expo/RN, WebRTC and VisionCamera together. Check O20 and record versions and evidence in STATUS.md.
 - `ios/` and `android/` are generated. Put durable native changes in config plugins and `modules/`.
+- With Hermes built from source, run iPhone and iOS Simulator builds sequentially: they share `ios/Pods/hermes-engine/destroot`, even with separate DerivedData directories. Android can build independently.
 - Keep build, bundle, prebuild and physical-device evidence separate. State missing prerequisites and preserve the agreed scope.
 - Out of scope: accounts, cloud media, SFU/TURN, public streaming, product multicam, color grading and Store publication.
