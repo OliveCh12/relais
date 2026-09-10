@@ -1,4 +1,8 @@
+import { useEffect, useRef } from 'react';
 import {
+  DropdownMenu,
+  DropdownMenuItem,
+  Slider,
   Card,
   Column,
   Host,
@@ -42,6 +46,57 @@ function Field({ row }: { row: Extract<SettingsRow, { kind: 'field' }> }) {
   );
 }
 
+function Choice({ row }: { row: Extract<SettingsRow, { kind: 'choice' }> }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenu.Trigger>
+        <ListItem colors={{ containerColor: 'transparent' }}>
+          <ListItem.HeadlineContent>
+            <Text>{row.label}</Text>
+          </ListItem.HeadlineContent>
+          <ListItem.SupportingContent>
+            <Text>{row.options.find((o) => o.value === row.value)?.label ?? row.value}</Text>
+          </ListItem.SupportingContent>
+        </ListItem>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Items>
+        {row.options.map((option) => (
+          <DropdownMenuItem
+            key={option.value}
+            enabled={!row.disabled}
+            onClick={() => row.onChange(option.value)}
+          >
+            <DropdownMenuItem.Text>
+              <Text>{option.label}</Text>
+            </DropdownMenuItem.Text>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenu.Items>
+    </DropdownMenu>
+  );
+}
+function Range({ row }: { row: Extract<SettingsRow, { kind: 'slider' }> }) {
+  const value = useRef(row.value);
+  useEffect(() => {
+    value.current = row.value;
+  }, [row.value]);
+  return (
+    <Column modifiers={[paddingAll(16)]}>
+      <Text>{row.label}</Text>
+      <Slider
+        value={row.value}
+        min={row.min}
+        max={row.max}
+        enabled={!row.disabled}
+        onValueChange={(next) => {
+          value.current = next;
+        }}
+        onValueChangeFinished={() => row.onChange(value.current)}
+      />
+    </Column>
+  );
+}
+
 export function SettingsPage({ sections, content }: SettingsPageProps) {
   const colors = useMaterialColors();
   return (
@@ -59,7 +114,11 @@ export function SettingsPage({ sections, content }: SettingsPageProps) {
               <Card>
                 <Column>
                   {section.rows.map((row) =>
-                    row.kind === 'field' ? (
+                    row.kind === 'choice' ? (
+                      <Choice key={row.label} row={row} />
+                    ) : row.kind === 'slider' ? (
+                      <Range key={row.label} row={row} />
+                    ) : row.kind === 'field' ? (
                       <Field key={`${row.label}:${row.value}`} row={row} />
                     ) : (
                       <ListItem
@@ -94,7 +153,11 @@ export function SettingsPage({ sections, content }: SettingsPageProps) {
                         )}
                         {row.kind === 'toggle' && (
                           <ListItem.TrailingContent>
-                            <Switch value={row.value} onCheckedChange={row.onChange} />
+                            <Switch
+                              value={row.value}
+                              onCheckedChange={row.onChange}
+                              enabled={!row.disabled}
+                            />
                           </ListItem.TrailingContent>
                         )}
                       </ListItem>

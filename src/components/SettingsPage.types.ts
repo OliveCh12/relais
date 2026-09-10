@@ -19,7 +19,30 @@ export type SettingsRow =
       onSave: (value: string) => void;
       maxLength: number;
     }
-  | { kind: 'toggle'; label: string; value: boolean; onChange: (value: boolean) => void };
+  | {
+      kind: 'toggle';
+      label: string;
+      value: boolean;
+      onChange: (value: boolean) => void;
+      disabled?: boolean;
+    }
+  | {
+      kind: 'choice';
+      label: string;
+      value: string;
+      options: { label: string; value: string }[];
+      onChange: (value: string) => void;
+      disabled?: boolean;
+    }
+  | {
+      kind: 'slider';
+      label: string;
+      value: number;
+      min: number;
+      max: number;
+      onChange: (value: number) => void;
+      disabled?: boolean;
+    };
 export interface SettingsPageProps {
   sections: { title: string; footer?: string; rows: SettingsRow[] }[];
   content?: ReactElement;

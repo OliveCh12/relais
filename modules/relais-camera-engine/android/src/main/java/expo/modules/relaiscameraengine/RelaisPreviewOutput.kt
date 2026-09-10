@@ -56,7 +56,7 @@ class RelaisPreviewOutput : HybridCameraOutputSpec(), NativeCameraOutput {
       .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
       .setResolutionSelector(ResolutionSelector.Builder()
         .setAspectRatioStrategy(if (photo) AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY else AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
-        .setResolutionStrategy(ResolutionStrategy(AndroidSize(if (photo) 960 else 1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
+        .setResolutionStrategy(ResolutionStrategy(AndroidSize(if (photo) 1440 else 1920, 1080), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
         .build())
       .build()
   }
@@ -70,7 +70,7 @@ object RelaisPreviewFrames {
   @Synchronized fun deliver(image: ImageProxy) {
     val target = observer ?: return
     val time = image.imageInfo.timestamp
-    if (time - lastFrame < 33_333_333L) return
+    if (time > lastFrame && time - lastFrame < 31_000_000L) return
     lastFrame = time
     val buffer = JavaI420Buffer.allocate(image.width, image.height)
     try {

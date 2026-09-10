@@ -128,10 +128,14 @@ export class RecordingController {
   async stop(): Promise<void> {
     await this.stopCapture();
     await this.completion;
+    if (this.state.phase === 'pending' || this.state.phase === 'error')
+      throw new Error(this.state.message);
   }
 
   async retrySave() {
     if (this.state.phase === 'pending' && this.state.pendingPath)
       await this.finish(this.state.pendingPath);
+    if (this.state.phase === 'pending' || this.state.phase === 'error')
+      throw new Error(this.state.message);
   }
 }

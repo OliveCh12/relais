@@ -37,7 +37,7 @@ export default function CameraScreen() {
   useEffect(() => {
     updateCamera(engine.captureState, engine.perform);
   }, [engine.captureState, engine.perform, updateCamera]);
-  const [grid, setGrid] = useState(false);
+  const { grid, setGrid } = engine;
   useEffect(() => {
     if (!__DEV__) return;
     const runtime = globalThis as typeof globalThis & {

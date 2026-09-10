@@ -64,6 +64,7 @@ const config: ExpoConfig = {
       },
     ],
     ['expo-dev-client', { launchMode: 'most-recent' }],
+    './plugins/with-xcode-build.cjs',
     [
       'expo-camera',
       {

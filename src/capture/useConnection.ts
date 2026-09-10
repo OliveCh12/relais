@@ -98,8 +98,8 @@ export function useConnection(
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') stop();
-      setForeground(state === 'active');
+      if (state === 'background') stop();
+      if (state !== 'inactive') setForeground(state === 'active');
     });
     void deviceRegistry
       .load()
@@ -189,8 +189,11 @@ export function useConnection(
                 pending.current = null;
                 clearTimeout(request.timer);
                 setSending(false);
-                if (message.ok === true) request.resolve();
-                else
+                if (message.ok === true) {
+                  const state = parseCaptureState(message.state);
+                  if (state) setRemote(state);
+                  request.resolve();
+                } else
                   request.reject(
                     new Error(
                       typeof message.error === 'string'
@@ -201,7 +204,7 @@ export function useConnection(
               }
             },
           },
-          { metrics: metricsEnabled.current },
+          { metrics: metricsEnabled.current, previewBitrate: 8_000_000 },
         );
         session.current = peer;
         if (descriptor) await peer.startMonitor(descriptor, expected);
@@ -262,7 +265,7 @@ export function useConnection(
           reject(
             new Error('The camera has not confirmed this action. Check it before trying again.'),
           );
-        }, 10_000);
+        }, 95_000);
         pending.current = { id, resolve, reject, timer };
         setSending(true);
         try {

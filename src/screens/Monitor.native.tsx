@@ -6,6 +6,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCaptureSession } from '@/capture/SessionContext';
 import type { CaptureAction } from '@/capture/protocol';
+import { ActionButton } from '@/components/ActionButton';
 import { CameraIconButton } from '@/components/CameraIconButton';
 import { CaptureModes } from '@/components/CaptureModes';
 import { MonitorSetup } from '@/components/connection/MonitorSetup';
@@ -56,7 +57,11 @@ export default function MonitorScreen() {
           ? diagnostics()
           : action.startsWith('connect:')
             ? start(parsePairingQr(action.slice(8)))
-            : sendCommand(action as CaptureAction);
+            : sendCommand(
+                action.startsWith('settings:')
+                  ? (JSON.parse(action.slice(9)) as CaptureAction)
+                  : (action as CaptureAction),
+              );
     return () => {
       delete runtime.__relaisMonitorTest;
     };
@@ -93,9 +98,9 @@ export default function MonitorScreen() {
               {recording && <Text style={styles.recording}>Recording</Text>}
             </View>
             <CameraIconButton
-              icon="info"
-              label="Connection details"
-              onPress={() => router.push('/monitor/info')}
+              icon="settings"
+              label="Settings on camera phone"
+              onPress={() => router.push('/monitor/camera-settings')}
             />
           </View>
           <View
@@ -108,6 +113,14 @@ export default function MonitorScreen() {
               <Text style={styles.message} accessibilityLiveRegion="polite">
                 {remote.message}
               </Text>
+            )}
+            {remote?.phase === 'pending' && (
+              <ActionButton
+                dark
+                label="Retry saving on camera"
+                onPress={() => command('retry-save')}
+                disabled={connection.sending || !connected}
+              />
             )}
             <View style={styles.shutter}>
               <CameraIconButton

@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CommandHost } from '../src/capture/CommandHost';
-import { emptyCaptureState, parseCaptureState, parseMessage } from '../src/capture/protocol';
+import {
+  emptyCaptureState,
+  parseCaptureState,
+  parseMessage,
+  type CaptureAction,
+} from '../src/capture/protocol';
 
-const request = (sequence: number, action = 'photo', id = `capture-${sequence}`) =>
-  JSON.stringify({ type: 'capture-command', id, sequence, action });
+const request = (
+  sequence: number,
+  action: CaptureAction | string = 'photo',
+  id = `capture-${sequence}`,
+) => JSON.stringify({ type: 'capture-command', id, sequence, action });
 
 test('capture commands require a completed pairing and valid bounded input', async () => {
   let captures = 0;
@@ -65,4 +73,53 @@ test('native errors reach the monitor without claiming capture success', async (
   assert.equal(parseCaptureState({ ...emptyCaptureState, mode: 'cinematic' }), null);
   assert.equal(parseCaptureState({ ...emptyCaptureState, startedAt: Infinity }), null);
   assert.equal(parseMessage('[]'), null);
+});
+
+test('remote settings validate the payload and bind duplicate IDs to its full contents', async () => {
+  const changes: CaptureAction[] = [];
+  const host = new CommandHost(async (action) => {
+    changes.push(action);
+  });
+  const action = { type: 'settings', revision: 4, key: 'profile', value: '2160-60-true' } as const;
+  assert.equal((await host.receive(request(1, action), true))?.ok, true);
+  assert.equal((await host.receive(request(1, action), true))?.ok, true);
+  assert.equal(
+    (await host.receive(request(1, { ...action, value: '1080-30-false' }), true))?.ok,
+    false,
+  );
+  assert.equal(changes.length, 1);
+  for (const invalid of [
+    { ...action, revision: -1 },
+    { ...action, key: 'focus' },
+    { ...action, value: 'unavailable' },
+    { type: 'settings', revision: 4, key: 'zoom', value: -1 },
+    { type: 'settings', revision: 4, key: 'audio', value: 1 },
+    { ...action, extra: 'ignored?' },
+  ])
+    assert.equal(
+      await host.receive(
+        JSON.stringify({ type: 'capture-command', id: 'invalid', sequence: 2, action: invalid }),
+        true,
+      ),
+      null,
+    );
+});
+
+test('a capture acknowledgement waits for the gallery operation and carries import failure', async () => {
+  let fail!: (error: Error) => void;
+  const host = new CommandHost(
+    () =>
+      new Promise((_, reject) => {
+        fail = reject;
+      }),
+  );
+  let replied = false;
+  const result = host.receive(request(1, 'stop'), true).then((reply) => {
+    replied = true;
+    return reply;
+  });
+  await Promise.resolve();
+  assert.equal(replied, false);
+  fail(new Error('Allow adding to Photos. Your capture is still in Relais.'));
+  assert.equal((await result)?.ok, false);
 });

@@ -44,12 +44,14 @@ export class PeerSession {
   private pingStalled = false;
   private metricsEnabled: boolean;
   private metricsReady = false;
+  private readonly previewBitrate: number;
 
   constructor(
     private readonly callbacks: PeerCallbacks,
-    options: { metrics?: boolean } = {},
+    options: { metrics?: boolean; previewBitrate?: number } = {},
   ) {
     this.metricsEnabled = options.metrics ?? true;
+    this.previewBitrate = options.previewBitrate ?? 2_500_000;
     this.peer.addEventListener('connectionstatechange', () => {
       if (this.abort.signal.aborted) return;
       callbacks.status(
@@ -229,7 +231,7 @@ export class PeerSession {
       if (sender.track?.kind !== 'video') continue;
       const parameters = sender.getParameters();
       for (const encoding of parameters.encodings) {
-        encoding.maxBitrate = 2_500_000;
+        encoding.maxBitrate = this.previewBitrate;
         encoding.maxFramerate = 30;
       }
       try {

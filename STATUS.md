@@ -4,6 +4,16 @@
 
 ## Photo and remote capture integration
 
+### Remote media reliability and native settings
+
+- iOS converts the shared AVFoundation output to bounded 8-bit BT.709 NV12 with native Core Image tone mapping. The original HDR/Cinematic movie is unchanged. Product previews target up to 1080p30 with an adaptive 8 Mbps ceiling, and both native cadence gates tolerate timestamp rounding. The isolated spike keeps its existing defaults.
+- iOS remote commands now wait for native start or PhotoKit asset commitment. Android propagates gallery-import failures. Failed originals remain private for retry from either phone. Transient iOS inactivity during permission dialogs no longer immediately disconnects the peer.
+- Monitor has a native Camera settings page for the named capturing phone: supported modes, front/rear camera, zoom, resolution, frame rate, HDR, microphone, stabilization and grid. Validated native profile catalogs and revisioned commands prevent stale or invented setting combinations. Zoom/grid remain available while recording; format changes wait until capture finishes.
+- Strict TypeScript, ESLint, 34 protocol/controller tests, architecture boundaries and formatting passed. Production exports for iOS, Android and web passed. Project Swift exception-conformance warnings were corrected, and a CNG plugin removes redundant app linker flags and declares the development launcher's always-run script accurately. Third-party native compilation/Gradle deprecations remain dependency warnings; they are not suppressed or described as project-code errors.
+- Final iPhone and Android ARM64 builds passed and were installed on the physical phones; the iPhone app passed strict signature verification. These are development clients loading the current code from Metro.
+- The owner explicitly took over physical capture and visual acceptance checks. No final-device capture or gallery validation is claimed for this pass. Compilation does not establish that the reported green-frame failure is resolved on the two phones.
+- [Implementation, sources and acceptance limits](docs/research/remote-media-reliability.md). No camera/WebRTC dependency version was changed.
+
 ### Settings-style lists and native stack pages
 
 - Android uses Material Card/ListItem groups and circular Surface device icons. iOS keeps SwiftUI inset-grouped List rows. The whole device row opens a page, including offline devices. Basic online/offline presence stays in the list; no signal statistics are collected there.

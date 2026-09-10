@@ -63,7 +63,7 @@ test('a refused gallery write preserves the completed file and retries saving wi
       finish('/documents/clip.mp4');
     },
   }));
-  await controller.stop();
+  await assert.rejects(controller.stop(), /Photos permission denied/);
   assert.equal(controller.getSnapshot().phase, 'pending');
   assert.equal(controller.getSnapshot().pendingPath, '/documents/clip.mp4');
   await controller.retrySave();

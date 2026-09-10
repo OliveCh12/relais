@@ -1,4 +1,7 @@
+import { useEffect, useRef } from 'react';
 import {
+  Picker,
+  Slider,
   Button,
   Form,
   Host,
@@ -12,6 +15,8 @@ import {
   useNativeState,
 } from '@expo/ui/swift-ui';
 import {
+  tag,
+  pickerStyle,
   disabled,
   foregroundStyle,
   textInputAutocapitalization,
@@ -33,6 +38,28 @@ function Field({ row }: { row: Extract<SettingsRow, { kind: 'field' }> }) {
       />
       <Button label={row.saveLabel} onPress={() => row.onSave(value.get())} />
     </>
+  );
+}
+
+function Range({ row }: { row: Extract<SettingsRow, { kind: 'slider' }> }) {
+  const value = useRef(row.value);
+  useEffect(() => {
+    value.current = row.value;
+  }, [row.value]);
+  return (
+    <Slider
+      label={<Text>{row.label}</Text>}
+      value={row.value}
+      min={row.min}
+      max={row.max}
+      modifiers={[disabled(row.disabled ?? false)]}
+      onValueChange={(next) => {
+        value.current = next;
+      }}
+      onEditingChanged={(editing) => {
+        if (!editing) row.onChange(value.current);
+      }}
+    />
   );
 }
 
@@ -58,12 +85,29 @@ export function SettingsPage({ sections, content }: SettingsPageProps) {
                 />
               ) : row.kind === 'field' ? (
                 <Field key={`${row.label}:${row.value}`} row={row} />
+              ) : row.kind === 'choice' ? (
+                <Picker
+                  key={row.label}
+                  label={row.label}
+                  selection={row.value}
+                  onSelectionChange={row.onChange}
+                  modifiers={[pickerStyle('menu'), disabled(row.disabled ?? false)]}
+                >
+                  {row.options.map((option) => (
+                    <Text key={option.value} modifiers={[tag(option.value)]}>
+                      {option.label}
+                    </Text>
+                  ))}
+                </Picker>
+              ) : row.kind === 'slider' ? (
+                <Range key={row.label} row={row} />
               ) : row.kind === 'toggle' ? (
                 <Toggle
                   key={row.label}
                   label={row.label}
                   isOn={row.value}
                   onIsOnChange={row.onChange}
+                  modifiers={[disabled(row.disabled ?? false)]}
                 />
               ) : (
                 <HStack key={row.label} spacing={10}>

@@ -9,10 +9,16 @@ public final class RelaisCameraEngineModule: Module {
       Prop("connectionLabel") { (view: AppleCameraView, label: String) in view.model.connectionLabel = label }
       Prop("keepSessionAlive") { (view: AppleCameraView, value: Bool) in view.keepSessionAlive = value }
     }
-    AsyncFunction("captureAction") { (action: String) throws -> [String: Any] in
-      guard let view = AppleCameraView.current else { throw CaptureFailure("Open Camera on the other phone first.") }
-      try view.model.perform(action)
-      return view.model.captureState
+    AsyncFunction("captureAction") { (action: String, promise: Promise) in
+      guard let view = AppleCameraView.current else {
+        promise.reject(CaptureFailure("Open Camera on the other phone first.")); return
+      }
+      view.model.perform(action) { result in
+        switch result {
+        case .success(let state): promise.resolve(state)
+        case .failure(let error): promise.reject(error)
+        }
+      }
     }.runOnQueue(.main)
     AsyncFunction("getCaptureState") { () -> [String: Any] in
       AppleCameraView.current?.model.captureState ?? ["ready": false]
@@ -54,10 +60,10 @@ public final class RelaisCameraEngineModule: Module {
   }
 }
 
-private final class CameraEngineStubException: Exception {
+private final class CameraEngineStubException: Exception, @unchecked Sendable {
   override var reason: String { "Native camera pipeline not implemented. No file created." }
 }
 
-private final class CameraFixtureException: Exception {
+private final class CameraFixtureException: Exception, @unchecked Sendable {
   override var reason: String { "Capability fixture missing or invalid." }
 }

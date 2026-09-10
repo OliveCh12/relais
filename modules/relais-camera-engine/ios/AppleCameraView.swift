@@ -78,7 +78,7 @@ final class AppleCameraView: ExpoView {
     if action == "cinematic" { model.change { $0.photo = false; $0.cinematic = true } }
     if action == "video" { model.change { $0.photo = false; $0.cinematic = false } }
     if action == "photo" { model.change { $0.photo = true; $0.cinematic = false } }
-    return model.captureState.merging(["mounted": true, "settingsPresented": model.showSettings,
+    return model.captureState.merging(["mounted": true, "preview": RelaisPreviewSource.shared().diagnostics(), "pendingFiles": model.pending.count, "lastSavedAsset": model.lastSavedAssetIdentifier ?? "", "settingsPresented": model.showSettings,
       "idleTimerDisabled": UIApplication.shared.isIdleTimerDisabled,
       "profiles": Array(Set(model.profiles.map(\.id))).sorted()]) { _, new in new }
   }
@@ -88,7 +88,6 @@ final class AppleCameraView: ExpoView {
 private struct AppleCameraScreen: View {
   @ObservedObject var model: AppleCameraModel
   let monitor: () -> Void
-  @State private var grid = UserDefaults.standard.bool(forKey: "relais.camera.grid")
   @State private var angle: CGFloat = 90
   @State private var confirmClose = false
   private var available: Bool { model.activeDevice != nil }
@@ -99,7 +98,7 @@ private struct AppleCameraScreen: View {
       let landscape = geometry.size.width > geometry.size.height
       ZStack {
         Color.black.ignoresSafeArea()
-        AppleCameraPreview(model: model, grid: grid && available, captureAngle: $angle).ignoresSafeArea()
+        AppleCameraPreview(model: model, grid: model.grid && available, captureAngle: $angle).ignoresSafeArea()
         if !available && !model.configuring { introduction.padding(.horizontal, 28) }
         VStack(spacing: 0) {
           HStack {
@@ -131,7 +130,6 @@ private struct AppleCameraScreen: View {
       }
     }
     .foregroundStyle(.white).preferredColorScheme(.dark).tint(.yellow)
-    .onChange(of: grid) { UserDefaults.standard.set($0, forKey: "relais.camera.grid") }
     .onChange(of: angle) { model.captureAngle = $0; RelaisPreviewSource.shared().rotation = (Int(($0 / 90).rounded()) * 90 % 360 + 360) % 360 }
     .sheet(isPresented: $model.showSettings) { settingsSheet }
     .confirmationDialog("Close Camera?", isPresented: $confirmClose, titleVisibility: .visible) {
@@ -226,7 +224,7 @@ private struct AppleCameraScreen: View {
       Form {
         Section {
           Label("Focus, exposure and color adjust automatically", systemImage: "sparkles")
-          Toggle("Grid", isOn: $grid)
+          Toggle("Grid", isOn: $model.grid)
         }
         if !model.settings.photo {
           Section("Video quality") {
@@ -237,6 +235,7 @@ private struct AppleCameraScreen: View {
               ForEach(rates, id: \.self) { Text("\($0) fps").tag($0) }
             }
             Toggle("HDR video", isOn: Binding(get: { model.settings.hdr }, set: { value in model.change { $0.hdr = value } })).disabled(!hdrSupported)
+            Toggle("Stabilization", isOn: Binding(get: { model.settings.stabilization }, set: { value in model.change { $0.stabilization = value } })).disabled(!model.stabilizationSupported)
             Toggle("Record audio", isOn: Binding(get: { model.settings.audio }, set: model.setAudio))
           }.disabled(model.busy || model.configuring)
         }

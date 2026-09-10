@@ -71,3 +71,7 @@ Network loss must not stop local recording. Reconnect must restore authoritative
 Native local and remote product controls are implemented. Historical demo pairing and web screens retain explicit scaffolds. The development spike has its own capture session, screen and in-memory Node rendezvous server on a LAN computer. The server carries no media. Standalone two-phone operation requires native signaling on the Camera and separate hotspot validation.
 
 Do not hide compatibility debt by disabling New Architecture. Exact versions are locked. A Metro bundle or prebuild is not an Xcode/Gradle build. [STATUS.md](../STATUS.md) separates those proofs and records unresolved issues.
+
+## Remote camera settings and media confirmation
+
+`src/capture/settings.ts` validates the camera-owned profile catalog and revisioned setting commands. Native settings pages configure the capturing phone, using the same owner and configuration callbacks as local controls. Capture replies wait for native start or gallery completion, with retained-file retry on failure. The native product preview targets bounded 1080p SDR independently of the original HDR/Cinematic file. See [media reliability](research/remote-media-reliability.md).

@@ -30,13 +30,21 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   private var closing = false
   private var generation = 0
   private var requestingPermission = false
+  private var canFlip = false
+  private var settingsRevision = 0
+  private var remoteApplying = false
+  private var remoteAction: String?
+  private var remoteCompletion: ((Result<[String: Any], Error>) -> Void)?
+  private var remoteDeadline: DispatchWorkItem?
+  private(set) var lastSavedAssetIdentifier: String?
+
 
   @Published private(set) var settings = AppleCaptureSettings()
   @Published private(set) var profiles: [AppleCaptureProfile] = []
   @Published private(set) var ready = false
-  @Published private(set) var configuring = false
+  @Published private(set) var configuring = false { didSet { scheduleRemoteCompletion() } }
   @Published private(set) var authorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
-  @Published private(set) var phase = "idle"
+  @Published private(set) var phase = "idle" { didSet { scheduleRemoteCompletion() } }
   @Published private(set) var startedAt: Date?
   @Published private(set) var message = ""
   @Published private(set) var lowLight = false
@@ -49,6 +57,9 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   @Published private(set) var stabilizationActive = false
   @Published private(set) var stabilizationSupported = false
   @Published private(set) var activeDevice: AVCaptureDevice?
+  @Published var grid = UserDefaults.standard.bool(forKey: "relais.camera.grid") {
+    didSet { UserDefaults.standard.set(grid, forKey: "relais.camera.grid"); settingsRevision += 1 }
+  }
   @Published var showSettings = false
   var onClose: (() -> Void)?
   var busy: Bool { !["idle", "saved", "pending", "error"].contains(phase) }
@@ -134,11 +145,12 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     requestingPermission = true
     let request = generation
     Task { @MainActor in
-      defer { requestingPermission = false; if !ready { resume() } }
+      defer { requestingPermission = false; remoteApplying = false; scheduleRemoteCompletion(); if !ready { resume() } }
       let granted = enabled ? await AVCaptureDevice.requestAccess(for: .audio) : true
       guard visible, !closing, generation == request else { return }
       if !granted {
-        message = "Allow microphone access in Settings to record audio."
+        message = "Allow microphone access in Settings on the camera phone to record audio."
+        completeRemote(.failure(CaptureFailure(message)))
         return
       }
       change { $0.audio = enabled }
@@ -148,6 +160,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   private func configure(_ desired: AppleCaptureSettings) {
     guard canUseCamera, authorized, !busy, !configuring else { return }
     let request = generation
+    phase = "idle"
     configuring = true
     ready = false
     message = ""
@@ -281,13 +294,19 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
     previewOutput.alwaysDiscardsLateVideoFrames = true
     previewOutput.setSampleBufferDelegate(RelaisPreviewSource.shared(), queue: previewQueue)
-    previewOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange]
     if #available(iOS 17.0, *) {
       previewOutput.automaticallyConfiguresOutputBufferDimensions = false
-      previewOutput.deliversPreviewSizedOutputBuffers = true
+      previewOutput.deliversPreviewSizedOutputBuffers = false
     }
     let shareable = session.canAddOutput(previewOutput)
-    if shareable { session.addOutput(previewOutput) }
+    if shareable {
+      session.addOutput(previewOutput)
+      let preferred = !selected.photo && selected.hdr
+        ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+      if previewOutput.availableVideoPixelFormatTypes.contains(preferred) {
+        previewOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: preferred]
+      } else { previewOutput.videoSettings = [:] }
+    }
     session.commitConfiguration()
     committed = true
     captureSettings = selected
@@ -311,6 +330,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
         }
       }
     }
+    let canFlip = !AppleCaptureCatalog.devices(front: !selected.front).isEmpty
     let running = session.isRunning && !session.isInterrupted
     let connection = movie.connection(with: .video)
     let stable = connection.map { $0.activeVideoStabilizationMode != .off } ?? false
@@ -319,8 +339,10 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     let displayZoom = device.videoZoomFactor * multiplier
     DispatchQueue.main.async {
       guard self.generation == request, self.visible, !self.closing else { return }
+      self.canFlip = canFlip
       self.canShare = shareable
       self.photoQuality = megapixels > 0 ? "\(megapixels) MP" : "Photo"
+      self.settingsRevision += 1
       self.settings = selected
       self.activeDevice = device
       self.profiles = allProfiles
@@ -349,8 +371,16 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
         let value = min(device.maxAvailableVideoZoomFactor, max(device.minAvailableVideoZoomFactor, displayValue / multiplier))
         device.videoZoomFactor = value
         device.unlockForConfiguration()
-        DispatchQueue.main.async { self.zoom = value * multiplier }
-      } catch { self.report(error) }
+        DispatchQueue.main.async {
+          self.zoom = value * multiplier
+          self.settingsRevision += 1
+          self.remoteApplying = false
+          self.scheduleRemoteCompletion()
+        }
+      } catch {
+        self.report(error)
+        DispatchQueue.main.async { self.remoteApplying = false; self.completeRemote(.failure(error)) }
+      }
     }
   }
 
@@ -359,19 +389,119 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     return device.deviceType == .builtInTripleCamera || device.deviceType == .builtInDualWideCamera ? 0.5 : 1
   }
 
+  private var remoteSettings: [String: Any] {
+    var seen = Set<String>()
+    let unique = profiles.filter { seen.insert($0.id).inserted }
+    let selected = "\(settings.height)-\(settings.fps)-\(settings.hdr)"
+    return ["revision": settingsRevision,
+      "profiles": unique.map { ["id": $0.id, "height": $0.height, "fps": $0.fps, "hdr": $0.hdr] as [String: Any] },
+      "profile": !settings.photo && unique.contains(where: { $0.id == selected }) ? selected as Any : NSNull(),
+      "audio": settings.audio, "grid": grid, "position": settings.front ? "front" : "back",
+      "canFlip": canFlip,
+      "zoom": min(maxZoom, max(minZoom, zoom)), "minZoom": minZoom, "maxZoom": maxZoom,
+      "zoomStops": zoomStops, "stabilization": settings.stabilization, "canStabilize": stabilizationSupported]
+  }
+
+  private func applyRemoteSettings(_ text: String) throws {
+    guard let data = text.data(using: .utf8), data.count <= 1024,
+      let command = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      command["type"] as? String == "settings", let revision = command["revision"] as? Int,
+      let key = command["key"] as? String else { throw CaptureFailure("Invalid camera setting.") }
+    guard revision == settingsRevision else { throw CaptureFailure("Camera settings changed. Please try again with the updated options.") }
+    remoteApplying = true
+    switch key {
+    case "profile":
+      guard !settings.photo, let id = command["value"] as? String,
+        let profile = profiles.first(where: { $0.id == id }) else { throw CaptureFailure("This video quality is unavailable on the camera phone.") }
+      change { $0.height = profile.height; $0.fps = profile.fps; $0.hdr = profile.hdr }
+    case "position":
+      guard let position = command["value"] as? String, ["front", "back"].contains(position),
+        !AppleCaptureCatalog.devices(front: position == "front").isEmpty else { throw CaptureFailure("This camera is unavailable.") }
+      change { $0.front = position == "front" }
+    case "audio":
+      guard let value = command["value"] as? Bool, !settings.photo else { throw CaptureFailure("Switch to Video to change audio.") }
+      setAudio(value)
+      return
+    case "grid":
+      guard let value = command["value"] as? Bool else { throw CaptureFailure("Invalid grid setting.") }
+      grid = value
+    case "stabilization":
+      guard let value = command["value"] as? Bool, stabilizationSupported, !settings.photo else { throw CaptureFailure("Stabilization is unavailable with these settings.") }
+      change { $0.stabilization = value }
+    case "zoom":
+      guard let value = command["value"] as? Double, value.isFinite, value >= minZoom, value <= maxZoom else { throw CaptureFailure("This zoom is unavailable on the camera phone.") }
+      setZoom(value)
+      return
+    default: throw CaptureFailure("Unknown camera setting.")
+    }
+    remoteApplying = false
+  }
+
   var captureState: [String: Any] {
     ["mode": settings.photo ? "photo" : settings.cinematic ? "cinematic" : "video",
      "modes": cinematicSupported ? ["photo", "video", "cinematic"] : ["photo", "video"],
-     "phase": phase, "ready": ready && !configuring, "canShare": canShare,
+     "settings": remoteSettings, "phase": phase, "ready": ready && !configuring, "canShare": canShare,
      "canCapture": canUseCamera && ready && !busy && !configuring && phase != "pending",
      "quality": settings.photo ? photoQuality : "\(AppleCaptureCatalog.label(settings.height)) · \(settings.fps) fps\(settings.hdr ? " · HDR" : "")",
      "message": message, "startedAt": startedAt.map { $0.timeIntervalSince1970 * 1000 } ?? 0]
   }
 
+  func perform(_ action: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+    guard remoteCompletion == nil else { completion(.failure(CaptureFailure("Wait for the camera to finish."))); return }
+    remoteAction = action
+    remoteCompletion = completion
+    let deadline = DispatchWorkItem { [weak self] in
+      self?.completeRemote(.failure(CaptureFailure("The camera has not confirmed completion. Check the camera phone before retrying.")))
+    }
+    remoteDeadline = deadline
+    DispatchQueue.main.asyncAfter(deadline: .now() + 90, execute: deadline)
+    do { try perform(action); scheduleRemoteCompletion() }
+    catch { completeRemote(.failure(error)) }
+  }
+
+  private func completeRemote(_ result: Result<[String: Any], Error>) {
+    let completion = remoteCompletion
+    remoteCompletion = nil
+    remoteApplying = false
+    remoteAction = nil
+    remoteDeadline?.cancel()
+    remoteDeadline = nil
+    completion?(result)
+  }
+
+  private func scheduleRemoteCompletion() {
+    DispatchQueue.main.async { [weak self] in
+      guard let self, let action = self.remoteAction else { return }
+      if self.phase == "pending" || self.phase == "error" {
+        self.completeRemote(.failure(CaptureFailure(self.message.isEmpty ? "Capture failed. Check the camera phone." : self.message)))
+      } else if action == "start", self.phase == "recording" {
+        self.completeRemote(.success(self.captureState))
+      } else if ["photo", "stop", "retry-save"].contains(action), self.phase == "saved" {
+        self.completeRemote(.success(self.captureState))
+      } else if (action.hasPrefix("mode-") || action.hasPrefix("{")) && !self.remoteApplying {
+        if self.ready && !self.configuring { self.completeRemote(.success(self.captureState)) }
+        else if !self.configuring && !self.message.isEmpty { self.completeRemote(.failure(CaptureFailure(self.message))) }
+      }
+    }
+  }
+
   func perform(_ action: String) throws {
     guard canUseCamera else { throw CaptureFailure("Keep Camera open on the other phone.") }
-    if action == "stop" { stopRecording(); return }
+    if action == "stop" {
+      guard phase == "recording" || phase == "starting" else { throw CaptureFailure("There is no recording to stop.") }
+      stopRecording(); return
+    }
+    if action == "retry-save" {
+      guard !busy, !pending.isEmpty else { throw CaptureFailure("There is no capture waiting to be saved.") }
+      recover(); return
+    }
+    if action.hasPrefix("{"), phase == "recording", ready, !configuring,
+      let data = action.data(using: .utf8), let command = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let key = command["key"] as? String, ["zoom", "grid"].contains(key) {
+      try applyRemoteSettings(action); return
+    }
     guard ready, !busy, !configuring, phase != "pending" else { throw CaptureFailure("Wait for the camera to be ready.") }
+    if action.hasPrefix("{") { try applyRemoteSettings(action); return }
     switch action {
     case "photo":
       guard settings.photo else { throw CaptureFailure("Switch to Photo first.") }
@@ -521,9 +651,10 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
 
   @MainActor private func save(_ paths: [String]) async {
     do {
-      for path in paths { _ = try await RecordingLibrary.save(path: path) }
+      guard !paths.isEmpty else { throw CaptureFailure("There is no capture waiting to be saved.") }
+      for path in paths { lastSavedAssetIdentifier = try await RecordingLibrary.save(path: path) }
       phase = "saved"
-      message = "Saved to Photos."
+      message = "Saved to Photos on this iPhone."
     } catch {
       phase = "pending"
       message = error.localizedDescription
@@ -560,6 +691,9 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   private func suspend() {
+    if let action = remoteAction, action.hasPrefix("mode-") || action.hasPrefix("{") {
+      completeRemote(.failure(CaptureFailure("Camera interrupted. Reopen Camera to change settings.")))
+    }
     generation += 1
     configuring = false
     ready = false

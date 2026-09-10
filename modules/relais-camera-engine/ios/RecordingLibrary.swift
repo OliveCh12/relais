@@ -40,8 +40,12 @@ enum RecordingLibrary {
     }
     var identifier: String?
     try await PHPhotoLibrary.shared().performChanges {
-      identifier = (photo ? PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url) : PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url))?
-        .placeholderForCreatedAsset?.localIdentifier
+      let request = PHAssetCreationRequest.forAsset()
+      let options = PHAssetResourceCreationOptions()
+      options.originalFilename = url.lastPathComponent
+      request.creationDate = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date()
+      request.addResource(with: photo ? .photo : .video, fileURL: url, options: options)
+      identifier = request.placeholderForCreatedAsset?.localIdentifier
     }
     guard let identifier else {
       throw RecordingLibraryException("Photos did not confirm the import. Your capture is still in Relais.")
@@ -51,6 +55,6 @@ enum RecordingLibrary {
   }
 }
 
-final class RecordingLibraryException: GenericException<String> {
+final class RecordingLibraryException: GenericException<String>, @unchecked Sendable {
   override var reason: String { param }
 }

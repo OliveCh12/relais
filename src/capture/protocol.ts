@@ -1,6 +1,19 @@
+import {
+  parseCameraSettings,
+  parseSettingsAction,
+  type CameraSettings,
+  type SettingsAction,
+} from './settings';
 export type CaptureMode = 'photo' | 'video' | 'cinematic';
 export type CaptureAction =
-  'photo' | 'start' | 'stop' | 'mode-photo' | 'mode-video' | 'mode-cinematic';
+  | 'photo'
+  | 'start'
+  | 'stop'
+  | 'retry-save'
+  | 'mode-photo'
+  | 'mode-video'
+  | 'mode-cinematic'
+  | SettingsAction;
 export interface CaptureState {
   mode: CaptureMode;
   modes: CaptureMode[];
@@ -11,6 +24,7 @@ export interface CaptureState {
   quality: string;
   message: string;
   startedAt: number;
+  settings?: CameraSettings;
 }
 export const emptyCaptureState: CaptureState = {
   mode: 'photo',
@@ -27,6 +41,7 @@ const actions = new Set<string>([
   'photo',
   'start',
   'stop',
+  'retry-save',
   'mode-photo',
   'mode-video',
   'mode-cinematic',
@@ -42,9 +57,10 @@ export interface CaptureReply {
   id: string;
   ok: boolean;
   error?: string;
+  state?: CaptureState;
 }
 export function parseMessage(text: unknown): Record<string, unknown> | null {
-  if (typeof text !== 'string' || text.length > 8192) return null;
+  if (typeof text !== 'string' || text.length > 32768) return null;
   try {
     const value: unknown = JSON.parse(text);
     return value && typeof value === 'object' && !Array.isArray(value)
@@ -55,11 +71,14 @@ export function parseMessage(text: unknown): Record<string, unknown> | null {
   }
 }
 export function parseRequest(value: Record<string, unknown>): CaptureRequest | null {
+  const action =
+    typeof value.action === 'string' && actions.has(value.action)
+      ? value.action
+      : parseSettingsAction(value.action);
   return value.type === 'capture-command' &&
     typeof value.id === 'string' &&
     /^[a-zA-Z0-9-]{1,80}$/.test(value.id) &&
-    typeof value.action === 'string' &&
-    actions.has(value.action) &&
+    action &&
     typeof value.sequence === 'number' &&
     Number.isSafeInteger(value.sequence) &&
     value.sequence > 0
@@ -67,14 +86,15 @@ export function parseRequest(value: Record<string, unknown>): CaptureRequest | n
         type: 'capture-command',
         id: value.id,
         sequence: value.sequence,
-        action: value.action as CaptureAction,
+        action: action as CaptureAction,
       }
     : null;
 }
 export function parseCaptureState(value: unknown): CaptureState | null {
   if (!value || typeof value !== 'object') return null;
   const state = value as CaptureState;
-  const validMode = (mode: unknown) => ['photo', 'video', 'cinematic'].includes(String(mode));
+  const validMode = (mode: unknown) =>
+    typeof mode === 'string' && ['photo', 'video', 'cinematic'].includes(mode);
   if (
     !validMode(state.mode) ||
     !Array.isArray(state.modes) ||
@@ -103,7 +123,10 @@ export function parseCaptureState(value: unknown): CaptureState | null {
     !Number.isFinite(state.startedAt)
   )
     return null;
+  const settings = state.settings === undefined ? undefined : parseCameraSettings(state.settings);
+  if (settings === null) return null;
   return {
+    ...(settings ? { settings } : {}),
     mode: state.mode,
     modes: state.modes,
     phase: state.phase,

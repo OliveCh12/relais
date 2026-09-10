@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { emptyCaptureState, parseCaptureState, parseMessage } from '../src/capture/protocol';
+import { parseCameraSettings, type CameraSettings } from '../src/capture/settings';
+
+const settings: CameraSettings = {
+  revision: 1,
+  profiles: [{ id: '2160-30-true', height: 2160, fps: 30, hdr: true }],
+  profile: '2160-30-true',
+  audio: true,
+  grid: false,
+  position: 'back',
+  canFlip: true,
+  zoom: 1,
+  minZoom: 0.5,
+  maxZoom: 20,
+  zoomStops: [0.5, 1, 2, 5],
+  stabilization: true,
+  canStabilize: true,
+};
+test('remote state accepts only coherent native capabilities and rejects unsafe ranges', () => {
+  assert.deepEqual(parseCameraSettings(settings), settings);
+  assert.deepEqual(parseCaptureState({ ...emptyCaptureState, settings })?.settings, settings);
+  for (const invalid of [
+    { ...settings, profile: '1080-60-false' },
+    { ...settings, profiles: [...settings.profiles, ...settings.profiles] },
+    { ...settings, maxZoom: 0.1 },
+    { ...settings, zoom: NaN },
+    { ...settings, zoomStops: [100] },
+    { ...settings, audio: 'true' },
+  ])
+    assert.equal(parseCameraSettings(invalid), null);
+});
+test('bounded control messages fit a large native catalog without allowing unbounded data', () => {
+  const profiles = Array.from({ length: 100 }, (_, i) => ({
+    id: `2160-${i + 1}-true`,
+    height: 2160,
+    fps: i + 1,
+    hdr: true,
+  }));
+  const message = JSON.stringify({
+    type: 'capture-state',
+    state: { ...emptyCaptureState, settings: { ...settings, profiles } },
+  });
+  assert.ok(parseCaptureState(parseMessage(message)?.state));
+  assert.equal(parseMessage(JSON.stringify({ padding: 'x'.repeat(32768) })), null);
+});

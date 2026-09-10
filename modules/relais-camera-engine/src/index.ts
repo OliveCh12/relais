@@ -4,7 +4,7 @@ import type {
   CameraConfiguration,
   CameraEventListeners,
 } from '../../../src/domain/camera';
-import type { CaptureState, CaptureAction } from '../../../src/capture/protocol';
+import type { CaptureState } from '../../../src/capture/protocol';
 
 declare class RelaisCameraEngineModule extends NativeModule<CameraEventListeners> {
   initializePreviewOutput(): void;
@@ -19,7 +19,7 @@ declare class RelaisCameraEngineModule extends NativeModule<CameraEventListeners
     settings: object;
   }>;
   createPhotoPath(): Promise<string>;
-  captureAction(action: CaptureAction): Promise<CaptureState>;
+  captureAction(action: string): Promise<CaptureState>;
   getCaptureState(): Promise<CaptureState>;
   getRecordingProfiles(deviceId: string, stabilization: boolean): Promise<RecordingProfile[]>;
   getCapabilities(): Promise<CameraCapabilities>;

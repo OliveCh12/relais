@@ -43,7 +43,12 @@ export default function CameraScreen() {
         onConnect={() => router.push('/camera/connect')}
         onCameraState={({ nativeEvent }) => {
           const next = parseCaptureState(nativeEvent);
-          if (next) updateCamera(next, NativeEngine.captureAction);
+          if (next)
+            updateCamera(next, (action) =>
+              NativeEngine.captureAction(
+                typeof action === 'string' ? action : JSON.stringify(action),
+              ),
+            );
         }}
         connectionLabel={
           connection.connected

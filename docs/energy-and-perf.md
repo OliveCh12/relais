@@ -7,8 +7,8 @@ These are acceptance budgets, not measured foundation results. Existing short tr
 | Successful pairing         | < 15 s from visible QR to open DataChannel            |
 | First Monitor frame        | < 2 s after connection, measured at rendering         |
 | Preview glass-to-glass p95 | < 300 ms                                              |
-| Preview                    | 720p30 default, 1080p30 maximum                       |
-| Preview bitrate            | ≤ 6 Mbps; initial target 2.5 Mbps                     |
+| Preview                    | Product target up to 1080p30; adaptive below it       |
+| Preview bitrate            | Product ceiling 8 Mbps; spike ceiling 2.5 Mbps        |
 | Local file                 | Validated 4K30, otherwise 1080p60 then 1080p30        |
 | Dropped file frames        | Zero outside critical thermal conditions              |
 | Monitor CPU                | Hardware decoding verified by profiling               |
