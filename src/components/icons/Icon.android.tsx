@@ -1,4 +1,5 @@
 import { Host, Icon as ComposeIcon } from '@expo/ui/jetpack-compose';
+import check from '@expo/material-symbols/check_circle.xml';
 import camera from '@expo/material-symbols/photo_camera.xml';
 import monitor from '@expo/material-symbols/crop_free.xml';
 import qr from '@expo/material-symbols/qr_code_scanner.xml';
@@ -26,6 +27,7 @@ import link3 from '@expo/material-symbols/signal_cellular_4_bar.xml';
 import type { IconProps } from './types';
 
 const icons = {
+  check,
   camera,
   monitor,
   qr,

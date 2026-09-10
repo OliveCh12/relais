@@ -14,6 +14,7 @@ import {
 } from 'react-native-vision-camera';
 import { NitroModules } from 'react-native-nitro-modules';
 import type { CaptureAction, CaptureMode, CaptureState } from '../../../src/capture/protocol';
+import { PhotoTimer } from '../../../src/capture/PhotoTimer';
 import { profileId, type SettingsAction } from '../../../src/capture/settings';
 import NativeEngine, { type RecordingProfile } from './index';
 import { RecordingController } from './RecordingController';
@@ -25,6 +26,12 @@ export function useLocalCameraEngine(isFocused: boolean) {
   const [mode, setMode] = useState<CaptureMode>('photo');
   const modeRef = useRef<CaptureMode>('photo');
   const photoBusy = useRef(false);
+  const [photoTimer] = useState(() => new PhotoTimer());
+  const [timer, setTimer] = useState<0 | 3 | 10>(0);
+  const [timerLight, setTimerLight] = useState(false);
+  const [flash, setFlash] = useState<'auto' | 'off' | 'on'>('auto');
+  const [exposure, setExposureValue] = useState(0);
+  const [exposureInfo, setExposureInfo] = useState<{ id: string; step: number } | null>(null);
   const photoFinalization = useRef<Promise<void>>(Promise.resolve());
   const photoCompletion = useRef<Promise<void>>(Promise.resolve());
   const [photoState, setPhotoState] = useState({
@@ -116,6 +123,24 @@ export function useLocalCameraEngine(isFocused: boolean) {
   const readyRef = useRef(false);
   const device = useCameraDevice(position);
   const alternate = useCameraDevice(position === 'back' ? 'front' : 'back');
+  const exposureStep = device && exposureInfo?.id === device.id ? exposureInfo.step : 0;
+  useEffect(() => {
+    if (!device || !enabled) return;
+    let current = true;
+    void NativeEngine.getExposureStep(device.id)
+      .then((step) => {
+        if (current && Number.isFinite(step) && step > 0) {
+          setExposureInfo({ id: device.id, step });
+          advanceRevision();
+        }
+      })
+      .catch(() => {
+        if (current) setExposureInfo(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [device, enabled, advanceRevision]);
   const profileKey = `${device?.id}:${stabilization}`;
   const profiles = profileCatalog?.key === profileKey ? profileCatalog.profiles : [];
   const selectedProfile = closestRecordingProfile(profiles, requested);
@@ -179,24 +204,28 @@ export function useLocalCameraEngine(isFocused: boolean) {
   const videoState = useSyncExternalStore(recorder.subscribe, recorder.getSnapshot);
   const recording = mode === 'photo' ? photoState : videoState;
   const stop = useCallback(async () => {
+    photoTimer.cancel();
     await recorder.stop();
     await photoCompletion.current;
-  }, [recorder]);
+  }, [recorder, photoTimer]);
   const busy =
     recovering ||
-    ['starting', 'recording', 'stopping', 'capturing', 'saving'].includes(recording.phase);
+    ['countdown', 'starting', 'recording', 'stopping', 'capturing', 'saving'].includes(
+      recording.phase,
+    );
   const updateReady = useCallback((value: boolean) => {
     readyRef.current = value;
     setReady(value);
   }, []);
   const reportError = useCallback(
     (failure: Error) => {
+      photoTimer.cancel();
       runningRef.current = false;
       updateReady(false);
       finishConfiguration(failure);
       setError(failure.message);
     },
-    [updateReady, finishConfiguration],
+    [updateReady, finishConfiguration, photoTimer],
   );
 
   useEffect(() => {
@@ -226,6 +255,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
     visibleRef.current = isFocused;
     const updateVisibility = () => {
       if (!isFocused || AppState.currentState !== 'active') {
+        photoTimer.cancel();
         visibilityGeneration.current += 1;
         finishConfiguration(new Error('Camera interrupted. Reopen Camera to change settings.'));
         updateReady(false);
@@ -248,11 +278,12 @@ export function useLocalCameraEngine(isFocused: boolean) {
       visibleRef.current = false;
       visibilityGeneration.current += 1;
       screenGeneration.current += 1;
+      photoTimer.cancel();
       listener.remove();
       readyRef.current = false;
       void recorder.stopCapture().catch(() => {});
     };
-  }, [isFocused, recorder, updateReady, finishConfiguration]);
+  }, [isFocused, recorder, updateReady, finishConfiguration, photoTimer]);
 
   const open = async () => {
     const request = screenGeneration.current;
@@ -314,14 +345,43 @@ export function useLocalCameraEngine(isFocused: boolean) {
     photoCompletion.current = new Promise((resolve) => {
       complete = resolve;
     });
-    setPhotoState({ phase: 'capturing', startedAt: null, message: '', pendingPath: null });
     let path: string | null = null;
+    const light =
+      timer > 0 && timerLight && device?.hasTorch ? cameraRef.current?.controller : undefined;
     try {
+      const countdown = photoTimer.wait(timer, (remaining) =>
+        setPhotoState({
+          phase: 'countdown',
+          startedAt: null,
+          message: `Photo in ${remaining}…`,
+          pendingPath: null,
+        }),
+      );
+      let elapsed: boolean;
+      try {
+        if (light) await light.setTorchMode('on');
+        elapsed = await countdown;
+      } finally {
+        photoTimer.cancel();
+        if (light) await light.setTorchMode('off');
+      }
+      if (!elapsed) {
+        if (!readyRef.current || request !== visibilityGeneration.current)
+          throw new Error('Camera interrupted. Photo canceled.');
+        setPhotoState({
+          phase: 'idle',
+          startedAt: null,
+          message: 'Photo canceled',
+          pendingPath: null,
+        });
+        return;
+      }
+      setPhotoState({ phase: 'capturing', startedAt: null, message: '', pendingPath: null });
       path = await NativeEngine.createPhotoPath();
       if (!readyRef.current || request !== visibilityGeneration.current)
         throw new Error('Camera interrupted. Try again.');
       const photo = await photoOutput.capturePhoto(
-        { flashMode: device?.hasFlash ? 'auto' : 'off' },
+        { flashMode: device?.hasFlash ? flash : 'off' },
         {},
       );
       try {
@@ -373,6 +433,44 @@ export function useLocalCameraEngine(isFocused: boolean) {
     if (action.revision !== revision.current)
       throw new Error('Camera settings changed. Please try again with the updated options.');
     switch (action.key) {
+      case 'exposure': {
+        const controller = cameraRef.current?.controller;
+        if (
+          !controller ||
+          !device?.supportsExposureBias ||
+          exposureStep <= 0 ||
+          !Number.isFinite(action.value) ||
+          action.value < device.minExposureBias * exposureStep ||
+          action.value > device.maxExposureBias * exposureStep
+        )
+          throw new Error('This brightness is unavailable on the camera phone.');
+        await controller.setExposureBias(Math.round(action.value / exposureStep));
+        setExposureValue(controller.exposureBias);
+        advanceRevision();
+        return;
+      }
+      case 'timerLight':
+        if (modeRef.current !== 'photo' || !device?.hasTorch)
+          throw new Error('Timer light is unavailable on this camera.');
+        setTimerLight(action.value);
+        advanceRevision();
+        return;
+      case 'timer':
+        if (modeRef.current !== 'photo' || ![0, 3, 10].includes(action.value))
+          throw new Error('Invalid photo timer.');
+        setTimer(action.value);
+        advanceRevision();
+        return;
+      case 'flash':
+        if (
+          modeRef.current !== 'photo' ||
+          !device?.hasFlash ||
+          !['off', 'auto', 'on'].includes(action.value)
+        )
+          throw new Error('Flash is unavailable on this camera.');
+        setFlash(action.value);
+        advanceRevision();
+        return;
       case 'profile': {
         const profile = profiles.find((p) => profileId(p) === action.value);
         if (modeRef.current === 'photo' || !profile)
@@ -450,6 +548,10 @@ export function useLocalCameraEngine(isFocused: boolean) {
     }
   };
   const perform = async (action: CaptureAction) => {
+    if (action === 'cancel-timer') {
+      if (!photoTimer.cancel()) throw new Error('The photo timer has already finished.');
+      return;
+    }
     if (action === 'stop') {
       await stop();
       return;
@@ -460,7 +562,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
     }
     if (
       typeof action === 'object' &&
-      ['zoom', 'grid'].includes(action.key) &&
+      ['zoom', 'grid', 'exposure'].includes(action.key) &&
       readyRef.current &&
       recorder.getSnapshot().phase === 'recording'
     ) {
@@ -507,6 +609,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
   const selectedFPS = useRef<number | undefined>(undefined);
   const selectedHDR = useRef(false);
   const configured = useCallback(() => {
+    setExposureValue(cameraRef.current?.controller?.exposureBias ?? 0);
     const resolution = activeOutput.currentResolution;
     setQuality(
       resolution && mode === 'photo'
@@ -532,6 +635,17 @@ export function useLocalCameraEngine(isFocused: boolean) {
     message: error || recording.message,
     startedAt: recording.startedAt ?? 0,
     settings: {
+      controls: {
+        ...(device?.hasTorch ? { timerLight } : {}),
+        exposure:
+          exposureStep *
+          Math.min(device?.maxExposureBias ?? 0, Math.max(device?.minExposureBias ?? 0, exposure)),
+        minExposure: device?.supportsExposureBias ? device.minExposureBias * exposureStep : 0,
+        maxExposure: device?.supportsExposureBias ? device.maxExposureBias * exposureStep : 0,
+        timer,
+        flash: device?.hasFlash ? flash : 'off',
+        hasFlash: !!device?.hasFlash,
+      },
       revision: settingsRevision,
       profiles: profiles.map((profile) => ({ ...profile, id: profileId(profile) })),
       profile: mode !== 'photo' && selectedProfile ? profileId(selectedProfile) : null,
@@ -568,6 +682,13 @@ export function useLocalCameraEngine(isFocused: boolean) {
       }
     },
     selectMode,
+    cancelTimer: () => photoTimer.cancel(),
+    setExposure: (value: number) =>
+      perform({ type: 'settings', revision: revision.current, key: 'exposure', value }),
+    setTimer: (value: 0 | 3 | 10) =>
+      perform({ type: 'settings', revision: revision.current, key: 'timer', value }),
+    setFlash: (value: 'auto' | 'off' | 'on') =>
+      perform({ type: 'settings', revision: revision.current, key: 'flash', value }),
     takePhoto,
     perform,
     captureState,
@@ -658,6 +779,7 @@ export function LocalCameraPreview({
       isActive={engine.isActive}
       orientationSource="device"
       resizeMode="contain"
+      enableNativeTapToFocusGesture
       enableNativeZoomGesture
       onConfigured={engine.onConfigured}
       onStarted={engine.onStarted}

@@ -52,6 +52,7 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
   let title: string = 'Info';
   let sections: SettingsPageProps['sections'] = [];
   let content: SettingsPageProps['content'];
+  let header: SettingsPageProps['header'];
   if (page === 'add') {
     title = 'Add camera';
     sections = [
@@ -180,19 +181,21 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
   } else if (page === 'device') {
     title = row?.device.name ?? 'Camera';
     if (row) {
+      header = {
+        title: row.device.name,
+        subtitle: 'Connect to this camera to take photos and record video remotely.',
+        icon: 'device',
+      };
       sections = [
         {
           title: 'Saved camera',
           rows: [
             {
-              kind: 'field',
+              kind: 'name',
+              id: row.device.id,
               label: 'Name on this phone',
               value: row.device.name,
-              maxLength: 60,
-              saveLabel: 'Save name',
-              onSave: (name) => {
-                void deviceRegistry.rename(row.device.id, name).catch(showError);
-              },
+              onSave: (name) => deviceRegistry.rename(row.device.id, name),
             },
             {
               kind: 'action',
@@ -201,6 +204,7 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
                   ? 'Back to camera'
                   : 'Connect',
               icon: 'camera',
+              prominent: true,
               disabled:
                 !row.descriptor &&
                 !(connection.connected && connection.device?.id === row.device.id),
@@ -217,7 +221,7 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
                 router.push({ pathname: '/monitor/info', params: { id: row.device.id } }),
             },
           ],
-          footer: 'Open Camera on this phone and keep both apps on the same Wi-Fi network.',
+          footer: 'Open Camera on this device and keep both phones on the same Wi-Fi network.',
         },
         {
           title: 'Pairing',
@@ -341,7 +345,11 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
     <View style={{ flex: 1, backgroundColor: theme.background, paddingBottom: insets.bottom }}>
       <Stack.Screen options={{ title }} />
       <StatusBar style="auto" />
-      <SettingsPage sections={sections} {...(content ? { content } : {})} />
+      <SettingsPage
+        sections={sections}
+        {...(header ? { header } : {})}
+        {...(content ? { content } : {})}
+      />
     </View>
   );
 }

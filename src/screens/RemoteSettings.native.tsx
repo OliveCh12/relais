@@ -1,4 +1,5 @@
-import { Alert } from 'react-native';
+import { cameraControlSections } from '@/components/CameraControlRows';
+import { Alert, Platform } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useCaptureSession } from '@/capture/SessionContext';
 import type { CameraSetting } from '@/capture/settings';
@@ -22,7 +23,7 @@ export default function RemoteSettings() {
     !remote?.ready ||
     !(remote.canCapture || remote.phase === 'recording');
   const command = (action: CaptureAction) => {
-    const framing = typeof action === 'object' && ['zoom', 'grid'].includes(action.key);
+    const framing = typeof action === 'object' && ['zoom', 'grid', 'exposure'].includes(action.key);
     if (framing ? framingDisabled : disabled) return;
     void connection
       .command(action)
@@ -116,8 +117,17 @@ export default function RemoteSettings() {
     sections.push({
       title: 'Capture',
       rows: captureRows,
-      footer: 'Focus, exposure and white balance adjust automatically on the camera phone.',
+      footer: 'Focus and white balance adjust automatically on the camera phone.',
     });
+    sections.push(
+      ...cameraControlSections(
+        settings.controls,
+        remote.mode === 'photo',
+        disabled,
+        framingDisabled,
+        change,
+      ),
+    );
     if (remote.mode !== 'photo' && selected) {
       const heights = [...new Set(settings.profiles.map((p) => p.height))].sort((a, b) => b - a);
       const rates = [
@@ -201,8 +211,24 @@ export default function RemoteSettings() {
   });
   return (
     <>
-      <Stack.Screen options={{ title: 'Camera settings' }} />
-      <SettingsPage sections={sections} />
+      <Stack.Screen
+        options={{
+          title: 'Camera settings',
+          ...(Platform.OS === 'android'
+            ? { headerShown: false, presentation: 'transparentModal' }
+            : {}),
+        }}
+      />
+      <SettingsPage
+        sections={sections}
+        header={{
+          title: name,
+          subtitle: 'Remote camera settings · Changes apply to the phone capturing the image.',
+          icon: 'camera',
+        }}
+        presentation={Platform.OS === 'android' ? 'sheet' : 'page'}
+        onDismiss={() => router.back()}
+      />
     </>
   );
 }

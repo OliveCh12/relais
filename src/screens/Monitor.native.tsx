@@ -1,4 +1,6 @@
-import { useCallback, useEffect } from 'react';
+import { ExposureControl } from '@/components/ExposureControl';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -27,7 +29,15 @@ export default function MonitorScreen() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const remote = connection.remote;
+  const [showExposure, setShowExposure] = useState(false);
+  const controls = remote?.settings?.controls;
+  const previewTap = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd((_event, success) => {
+      if (success) setShowExposure(true);
+    });
   const recording = remote?.phase === 'recording';
+  const countdown = remote?.phase === 'countdown';
   const visible = !!connection.stream;
   const command = useCallback(
     (action: CaptureAction) => {
@@ -80,7 +90,11 @@ export default function MonitorScreen() {
       <StatusBar style={visible ? 'light' : 'auto'} />
       {visible && connection.stream ? (
         <>
-          <RemotePreview stream={connection.stream} fill={fill} />
+          <GestureDetector gesture={previewTap}>
+            <View style={StyleSheet.absoluteFill} collapsable={false}>
+              <RemotePreview stream={connection.stream} fill={fill} />
+            </View>
+          </GestureDetector>
           <View
             style={[
               styles.top,
@@ -122,21 +136,55 @@ export default function MonitorScreen() {
                 disabled={connection.sending || !connected}
               />
             )}
+            {showExposure &&
+              controls &&
+              remote?.settings &&
+              controls.maxExposure > controls.minExposure &&
+              !countdown && (
+                <ExposureControl
+                  value={controls.exposure}
+                  min={controls.minExposure}
+                  max={controls.maxExposure}
+                  disabled={!connected || connection.sending || !(remote.canCapture || recording)}
+                  onChange={(value) =>
+                    command({
+                      type: 'settings',
+                      key: 'exposure',
+                      value,
+                      revision: remote.settings!.revision,
+                    })
+                  }
+                  onClose={() => setShowExposure(false)}
+                />
+              )}
             <View style={styles.shutter}>
               <CameraIconButton
                 large
                 photo={remote?.mode === 'photo'}
-                icon={recording ? 'stop' : 'record'}
+                icon={recording || countdown ? 'stop' : 'record'}
                 label={
-                  recording
-                    ? 'Stop recording on camera'
-                    : remote?.mode === 'photo'
-                      ? 'Take a photo on camera'
-                      : 'Record a video on camera'
+                  countdown
+                    ? 'Cancel photo timer'
+                    : recording
+                      ? 'Stop recording on camera'
+                      : remote?.mode === 'photo'
+                        ? 'Take a photo on camera'
+                        : 'Record a video on camera'
                 }
-                disabled={!connected || connection.sending || (!recording && !remote?.canCapture)}
+                disabled={
+                  !connected ||
+                  (!countdown && (connection.sending || (!recording && !remote?.canCapture)))
+                }
                 onPress={() =>
-                  command(recording ? 'stop' : remote?.mode === 'photo' ? 'photo' : 'start')
+                  command(
+                    countdown
+                      ? 'cancel-timer'
+                      : recording
+                        ? 'stop'
+                        : remote?.mode === 'photo'
+                          ? 'photo'
+                          : 'start',
+                  )
                 }
               />
             </View>

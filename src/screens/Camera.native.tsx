@@ -1,3 +1,6 @@
+import NativeEngine from '../../modules/relais-camera-engine/src';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { ExposureControl } from '@/components/ExposureControl';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -34,6 +37,14 @@ export default function CameraScreen() {
   const { connection, updateCamera } = useCaptureSession();
   const engine = useLocalCameraEngine(connection.focused);
   const [settings, setSettings] = useState(false);
+  const [showExposure, setShowExposure] = useState(false);
+  const controls = engine.captureState.settings?.controls;
+  const countdown = engine.recording.phase === 'countdown';
+  const previewTap = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd((_event, success) => {
+      if (success) setShowExposure(true);
+    });
   useEffect(() => {
     updateCamera(engine.captureState, engine.perform);
   }, [engine.captureState, engine.perform, updateCamera]);
@@ -96,7 +107,11 @@ export default function CameraScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: !engine.busy }} />
       <StatusBar style="light" />
-      <LocalCameraPreview engine={engine} />
+      <GestureDetector gesture={Gesture.Simultaneous(Gesture.Native(), previewTap)}>
+        <View style={StyleSheet.absoluteFill} collapsable={false}>
+          <LocalCameraPreview engine={engine} />
+        </View>
+      </GestureDetector>
       {grid && engine.enabled && (
         <View pointerEvents="none" style={styles.grid}>
           <View style={[styles.lineV, { left: '33.333%' }]} />
@@ -124,6 +139,11 @@ export default function CameraScreen() {
             <Text style={styles.caption}>{engine.audio ? 'With audio' : 'No audio'}</Text>
           )}
         </View>
+        <CameraIconButton
+          icon="qr"
+          label="Connect a monitor"
+          onPress={() => router.push('/camera/connect')}
+        />
         <CameraIconButton
           icon="settings"
           label="Camera settings"
@@ -199,6 +219,19 @@ export default function CameraScreen() {
               onPress={() => act(engine.recover)}
             />
           )}
+          {showExposure &&
+            controls &&
+            controls.maxExposure > controls.minExposure &&
+            !engine.busy && (
+              <ExposureControl
+                value={controls.exposure}
+                min={controls.minExposure}
+                max={controls.maxExposure}
+                disabled={!engine.ready}
+                onChange={(value) => act(() => engine.setExposure(value))}
+                onClose={() => setShowExposure(false)}
+              />
+            )}
           {!landscape && (
             <CameraZoom
               stops={engine.zoomStops}
@@ -208,34 +241,43 @@ export default function CameraScreen() {
           )}
           <View style={[styles.controls, landscape && styles.vertical]}>
             <CameraIconButton
-              icon="qr"
-              label="Connect a monitor"
-              onPress={() => router.push('/camera/connect')}
+              icon="gallery"
+              roundedSquare
+              label="Open gallery"
+              disabled={engine.busy}
+              onPress={() => act(() => NativeEngine.openGallery())}
             />
             <CameraIconButton
               large
               photo={engine.mode === 'photo'}
-              icon={recording ? 'stop' : 'record'}
+              icon={recording || countdown ? 'stop' : 'record'}
               label={
-                recording
-                  ? 'Stop recording'
-                  : engine.mode === 'photo'
-                    ? 'Take a photo'
-                    : 'Record a video'
+                countdown
+                  ? 'Cancel photo timer'
+                  : recording
+                    ? 'Stop recording'
+                    : engine.mode === 'photo'
+                      ? 'Take a photo'
+                      : 'Record a video'
               }
-              disabled={transitioning || (!recording && !engine.captureState.canCapture)}
+              disabled={
+                !countdown && (transitioning || (!recording && !engine.captureState.canCapture))
+              }
               onPress={() =>
                 act(
-                  recording
-                    ? engine.stop
-                    : engine.mode === 'photo'
-                      ? engine.takePhoto
-                      : engine.start,
+                  countdown
+                    ? async () => engine.cancelTimer()
+                    : recording
+                      ? engine.stop
+                      : engine.mode === 'photo'
+                        ? engine.takePhoto
+                        : engine.start,
                 )
               }
             />
             <CameraIconButton
               icon="flip"
+              roundedSquare
               label="Switch camera"
               disabled={!engine.ready || engine.busy || !engine.canFlip}
               onPress={engine.flip}
@@ -253,7 +295,7 @@ export default function CameraScreen() {
             <Text style={styles.hint}>
               {connection.connected
                 ? `Connected to ${connection.device?.name ?? 'Monitor'}`
-                : 'Focus and exposure are automatic'}
+                : 'Tap the viewfinder to adjust brightness'}
             </Text>
           )}
         </View>
@@ -278,6 +320,16 @@ export default function CameraScreen() {
       <CameraOptions
         visible={settings}
         onClose={() => setSettings(false)}
+        {...(controls ? { controls } : {})}
+        onSetting={(setting) =>
+          act(() =>
+            engine.perform({
+              type: 'settings',
+              revision: engine.captureState.settings!.revision,
+              ...setting,
+            }),
+          )
+        }
         audio={engine.audio}
         onAudio={(value) => act(() => engine.setMicrophone(value))}
         grid={grid}

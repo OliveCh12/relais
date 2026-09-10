@@ -94,6 +94,7 @@ private struct AppleCameraScreen: View {
   private var mode: String { model.settings.photo ? "photo" : model.settings.cinematic ? "cinematic" : "video" }
 
   var body: some View {
+    NavigationStack {
     GeometryReader { geometry in
       let landscape = geometry.size.width > geometry.size.height
       ZStack {
@@ -113,7 +114,25 @@ private struct AppleCameraScreen: View {
               }
             }
             Spacer()
-            if available { icon("slider.horizontal.3", "Camera settings") { model.showSettings = true } }
+            if available {
+              if model.settings.photo {
+                Menu {
+                  Picker("Timer", selection: Binding(get: { model.timerSeconds }, set: model.setTimer)) {
+                    Text("Off").tag(0)
+                    Text("3 seconds").tag(3)
+                    Text("10 seconds").tag(10)
+                  }
+                } label: {
+                  HStack(spacing: 3) {
+                    Image(systemName: "timer")
+                    if model.timerSeconds > 0 { Text("\(model.timerSeconds)s").font(.caption) }
+                  }.frame(minWidth: 44, minHeight: 44)
+                }.disabled(model.busy || model.configuring)
+                  .accessibilityLabel("Photo timer: \(model.timerSeconds == 0 ? "off" : "\(model.timerSeconds) seconds")")
+              }
+              icon("qrcode", "Connect a monitor") { model.onConnect?() }
+              icon("slider.horizontal.3", "Camera settings") { model.showSettings = true }
+            }
             else { Color.clear.frame(width: 44, height: 44) }
           }
           .padding(.horizontal, 16).padding(.top, 4)
@@ -129,9 +148,11 @@ private struct AppleCameraScreen: View {
         if model.configuring { ProgressView().tint(.white).accessibilityLabel("Preparing camera") }
       }
     }
+    .toolbar(.hidden, for: .navigationBar)
+    .navigationDestination(isPresented: $model.showSettings) { settingsPage }
+    }
     .foregroundStyle(.white).preferredColorScheme(.dark).tint(.yellow)
     .onChange(of: angle) { model.captureAngle = $0; RelaisPreviewSource.shared().rotation = (Int(($0 / 90).rounded()) * 90 % 360 + 360) % 360 }
-    .sheet(isPresented: $model.showSettings) { settingsSheet }
     .confirmationDialog("Close Camera?", isPresented: $confirmClose, titleVisibility: .visible) {
       Button("Finish and close") { model.requestClose() }
       Button("Stay in Camera", role: .cancel) {}
@@ -166,28 +187,33 @@ private struct AppleCameraScreen: View {
       if model.phase == "pending" || (!model.pending.isEmpty && !model.busy) {
         Button("Add to Photos") { model.recover() }.buttonStyle(.bordered)
       }
+      if model.showExposure && model.maxExposure > model.minExposure && (!model.busy || model.recording) {
+        AppleExposureControl(model: model)
+      }
       if model.zoomStops.count > 1 && !landscape {
         Picker("Zoom", selection: Binding(get: { nearestZoom }, set: { model.setZoom($0) })) {
           ForEach(model.zoomStops, id: \.self) { value in Text("\(value, specifier: "%g")×").tag(value) }
         }.pickerStyle(.segmented).frame(maxWidth: 260).disabled(!model.ready)
       }
       HStack {
-        icon("qrcode", "Connect a monitor") { model.onConnect?() }
+        AppleGalleryButton().disabled(model.busy || model.configuring)
         Spacer()
         Button {
-          if model.recording { model.stopRecording() }
+          if model.phase == "countdown" { model.cancelTimer() }
+          else if model.recording { model.stopRecording() }
           else if model.settings.photo { model.takePhoto() }
           else { model.record(rotation: model.captureAngle) }
         } label: {
           ZStack {
             Circle().strokeBorder(.white, lineWidth: 3).frame(width: 72, height: 72)
-            if model.busy && !model.recording { ProgressView().tint(.white) }
+            if model.phase == "countdown" { Image(systemName: "xmark").font(.title2).foregroundStyle(.white) }
+            else if model.busy && !model.recording { ProgressView().tint(.white) }
             else if model.recording { RoundedRectangle(cornerRadius: 6).fill(.red).frame(width: 28, height: 28) }
             else { Circle().fill(model.settings.photo ? .white : .red).frame(width: 60, height: 60) }
           }.frame(width: 84, height: 84)
         }.buttonStyle(.plain)
-          .disabled((model.busy && !model.recording) || (!model.recording && (!model.ready || model.configuring || model.phase == "pending")))
-          .accessibilityLabel(model.recording ? "Stop recording" : model.settings.photo ? "Take photo" : "Record video")
+          .disabled(model.phase != "countdown" && ((model.busy && !model.recording) || (!model.recording && (!model.ready || model.configuring || model.phase == "pending"))))
+          .accessibilityLabel(model.phase == "countdown" ? "Cancel photo timer" : model.recording ? "Stop recording" : model.settings.photo ? "Take photo" : "Record video")
         Spacer()
         icon("arrow.triangle.2.circlepath.camera", "Switch camera") { model.change { $0.front.toggle() } }
           .disabled(model.busy || model.configuring)
@@ -199,6 +225,14 @@ private struct AppleCameraScreen: View {
         Text("Video").tag("video")
         if model.cinematicSupported { Text("Cinematic").tag("cinematic") }
       }.pickerStyle(.segmented).disabled(model.busy || model.configuring)
+        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { gesture in
+          guard !model.busy, !model.configuring, abs(gesture.translation.width) > abs(gesture.translation.height) else { return }
+          let modes = model.cinematicSupported ? ["photo", "video", "cinematic"] : ["photo", "video"]
+          guard let index = modes.firstIndex(of: mode) else { return }
+          let next = index + (gesture.translation.width < 0 ? 1 : -1)
+          guard modes.indices.contains(next) else { return }
+          model.change { $0.photo = modes[next] == "photo"; $0.cinematic = modes[next] == "cinematic" }
+        })
       Text(model.connectionLabel).font(.caption).foregroundStyle(.secondary).lineLimit(2)
     }
   }
@@ -219,12 +253,27 @@ private struct AppleCameraScreen: View {
   private var rates: [Int] { Array(Set(model.profiles.filter { $0.height == model.settings.height && $0.hdr == model.settings.hdr }.map(\.fps))).sorted() }
   private var hdrSupported: Bool { model.profiles.contains { $0.height == model.settings.height && $0.fps == model.settings.fps && $0.hdr } }
 
-  private var settingsSheet: some View {
-    NavigationStack {
+  private var settingsPage: some View {
       Form {
         Section {
-          Label("Focus, exposure and color adjust automatically", systemImage: "sparkles")
+          Label("This iPhone", systemImage: "iphone")
+          Text("Focus and color adjust automatically.").foregroundStyle(.secondary)
           Toggle("Grid", isOn: $model.grid)
+        }
+        if model.maxExposure > model.minExposure {
+          Section("Brightness") { AppleExposureControl(model: model, compact: true) }
+        }
+        if model.settings.photo {
+          Section("Photo") {
+            Picker("Timer", selection: Binding(get: { model.timerSeconds }, set: model.setTimer)) {
+              Text("Off").tag(0); Text("3 seconds").tag(3); Text("10 seconds").tag(10)
+            }
+            if model.hasFlash {
+              Picker("Flash", selection: Binding(get: { model.flashMode }, set: model.setFlash)) {
+                Text("Auto").tag("auto"); Text("Off").tag("off"); Text("On").tag("on")
+              }
+            }
+          }.disabled(model.busy || model.configuring)
         }
         if !model.settings.photo {
           Section("Video quality") {
@@ -245,8 +294,32 @@ private struct AppleCameraScreen: View {
             .font(.footnote).foregroundStyle(.secondary)
         }
       }
-      .navigationTitle("Camera settings").navigationBarTitleDisplayMode(.inline)
-      .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.showSettings = false } } }
-    }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+      .navigationTitle("Camera settings").navigationBarTitleDisplayMode(.inline).tint(.blue)
+      .toolbar(.visible, for: .navigationBar)
+  }
+}
+
+private struct AppleExposureControl: View {
+  @ObservedObject var model: AppleCameraModel
+  var compact = false
+  @State private var value = 0.0
+  var body: some View {
+    VStack(spacing: 8) {
+      HStack {
+        Label("\(model.exposure, specifier: "%+.1f") EV", systemImage: "sun.max")
+          .font(.subheadline).monospacedDigit()
+        Spacer()
+        Button("Reset") { model.setExposure(0) }.disabled(model.exposure == 0)
+        if !compact { Button("Done") { model.showExposure = false } }
+      }
+      Slider(value: $value, in: model.minExposure...model.maxExposure, onEditingChanged: { editing in
+        if !editing { model.setExposure(value) }
+      }).accessibilityLabel("Brightness")
+    }
+    .padding(compact ? 0 : 12)
+    .background { if !compact { RoundedRectangle(cornerRadius: 20).fill(.regularMaterial) } }
+    .disabled(!model.ready || model.configuring || (model.busy && !model.recording))
+    .onAppear { value = model.exposure }
+    .onChange(of: model.exposure) { value = $0 }
   }
 }

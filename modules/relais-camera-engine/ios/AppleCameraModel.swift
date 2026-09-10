@@ -31,6 +31,14 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   private var generation = 0
   private var requestingPermission = false
   private var canFlip = false
+  private var photoTimerTask: Task<Void, Never>?
+  @Published private(set) var timerSeconds = 0
+  @Published private(set) var flashMode = "auto"
+  @Published private(set) var exposure = 0.0
+  @Published var showExposure = false
+  var minExposure: Double { Double(activeDevice?.minExposureTargetBias ?? 0) }
+  var maxExposure: Double { Double(activeDevice?.maxExposureTargetBias ?? 0) }
+  var hasFlash: Bool { activeDevice?.hasFlash ?? false }
   private var settingsRevision = 0
   private var remoteApplying = false
   private var remoteAction: String?
@@ -78,12 +86,14 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       center.addObserver(forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main) { [weak self] _ in
         self?.ready = false
         self?.message = "Camera interrupted. The current recording is retained."
+        self?.cancelTimer()
         self?.stopRecording()
       },
       center.addObserver(forName: .AVCaptureSessionInterruptionEnded, object: session, queue: .main) { [weak self] _ in
         self?.resume()
       },
       center.addObserver(forName: .AVCaptureSessionRuntimeError, object: session, queue: .main) { [weak self] note in
+        self?.cancelTimer()
         self?.ready = false
         self?.message = (note.userInfo?[AVCaptureSessionErrorKey] as? Error)?.localizedDescription ?? "Camera unavailable. Reopen Camera."
       }
@@ -345,6 +355,8 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       self.settingsRevision += 1
       self.settings = selected
       self.activeDevice = device
+      self.exposure = Double(device.exposureTargetBias)
+      self.showExposure = false
       self.profiles = allProfiles
       self.cinematicSupported = cinematicSupported
       self.configuring = false
@@ -384,6 +396,71 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
   }
 
+  func setExposure(_ value: Double) {
+    guard ready, !configuring, (!busy || recording), value.isFinite, value >= minExposure, value <= maxExposure else {
+      remoteApplying = false
+      completeRemote(.failure(CaptureFailure("This brightness is unavailable on the camera phone.")))
+      return
+    }
+    let request = generation
+    queue.async {
+      guard let device = self.input?.device else { return }
+      do {
+        try device.lockForConfiguration()
+        device.setExposureTargetBias(Float(value)) { _ in
+          DispatchQueue.main.async {
+            guard self.generation == request else { return }
+            self.exposure = Double(device.exposureTargetBias)
+            self.settingsRevision += 1
+            self.remoteApplying = false
+            self.scheduleRemoteCompletion()
+          }
+        }
+        device.unlockForConfiguration()
+      } catch {
+        self.report(error)
+        DispatchQueue.main.async { self.remoteApplying = false; self.completeRemote(.failure(error)) }
+      }
+    }
+  }
+
+  func meter(at point: CGPoint) {
+    guard ready, !configuring, !busy || recording else { return }
+    showExposure = true
+    queue.async {
+      guard let device = self.input?.device else { return }
+      do {
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+        if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = point }
+        if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = point }
+        if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+        if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
+      } catch { self.report(error) }
+    }
+  }
+
+  func setTimer(_ seconds: Int) {
+    guard !busy, [0, 3, 10].contains(seconds) else { return }
+    timerSeconds = seconds
+    settingsRevision += 1
+  }
+
+  func setFlash(_ value: String) {
+    guard !busy, hasFlash, ["auto", "on", "off"].contains(value) else { return }
+    flashMode = value
+    settingsRevision += 1
+  }
+
+  func cancelTimer() {
+    guard phase == "countdown" else { return }
+    photoTimerTask?.cancel()
+    photoTimerTask = nil
+    phase = "idle"
+    message = "Photo canceled"
+    if remoteAction == "photo" { completeRemote(.success(captureState)) }
+  }
+
   private func displayZoomMultiplier(for device: AVCaptureDevice) -> CGFloat {
     if #available(iOS 18.0, *) { return device.displayVideoZoomFactorMultiplier }
     return device.deviceType == .builtInTripleCamera || device.deviceType == .builtInDualWideCamera ? 0.5 : 1
@@ -393,7 +470,10 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     var seen = Set<String>()
     let unique = profiles.filter { seen.insert($0.id).inserted }
     let selected = "\(settings.height)-\(settings.fps)-\(settings.hdr)"
-    return ["revision": settingsRevision,
+    return ["controls": ["exposure": min(maxExposure, max(minExposure, exposure)),
+      "minExposure": minExposure, "maxExposure": maxExposure, "timer": timerSeconds,
+      "flash": hasFlash ? flashMode : "off", "hasFlash": hasFlash] as [String: Any],
+      "revision": settingsRevision,
       "profiles": unique.map { ["id": $0.id, "height": $0.height, "fps": $0.fps, "hdr": $0.hdr] as [String: Any] },
       "profile": !settings.photo && unique.contains(where: { $0.id == selected }) ? selected as Any : NSNull(),
       "audio": settings.audio, "grid": grid, "position": settings.front ? "front" : "back",
@@ -410,6 +490,16 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     guard revision == settingsRevision else { throw CaptureFailure("Camera settings changed. Please try again with the updated options.") }
     remoteApplying = true
     switch key {
+    case "exposure":
+      guard let value = command["value"] as? Double, value.isFinite, value >= minExposure, value <= maxExposure else { throw CaptureFailure("Invalid brightness.") }
+      setExposure(value)
+      return
+    case "timer":
+      guard settings.photo, let value = command["value"] as? Int, [0, 3, 10].contains(value) else { throw CaptureFailure("Invalid photo timer.") }
+      setTimer(value)
+    case "flash":
+      guard settings.photo, hasFlash, let value = command["value"] as? String, ["off", "auto", "on"].contains(value) else { throw CaptureFailure("Flash is unavailable on this camera.") }
+      setFlash(value)
     case "profile":
       guard !settings.photo, let id = command["value"] as? String,
         let profile = profiles.first(where: { $0.id == id }) else { throw CaptureFailure("This video quality is unavailable on the camera phone.") }
@@ -447,6 +537,12 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   func perform(_ action: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+    if action == "cancel-timer" {
+      guard phase == "countdown" else { completion(.failure(CaptureFailure("The photo timer has already finished."))); return }
+      cancelTimer()
+      completion(.success(captureState))
+      return
+    }
     guard remoteCompletion == nil else { completion(.failure(CaptureFailure("Wait for the camera to finish."))); return }
     remoteAction = action
     remoteCompletion = completion
@@ -497,7 +593,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
     if action.hasPrefix("{"), phase == "recording", ready, !configuring,
       let data = action.data(using: .utf8), let command = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-      let key = command["key"] as? String, ["zoom", "grid"].contains(key) {
+      let key = command["key"] as? String, ["zoom", "grid", "exposure"].contains(key) {
       try applyRemoteSettings(action); return
     }
     guard ready, !busy, !configuring, phase != "pending" else { throw CaptureFailure("Wait for the camera to be ready.") }
@@ -520,9 +616,32 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
 
   func takePhoto() {
     guard canUseCamera, ready, !busy, !configuring, phase != "pending", settings.photo else { return }
+    guard timerSeconds > 0 else { capturePhotoNow(); return }
+    phase = "countdown"
+    showExposure = false
+    let request = generation
+    let deadline = Date().addingTimeInterval(TimeInterval(timerSeconds))
+    photoTimerTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      while !Task.isCancelled {
+        let remaining = Int(ceil(deadline.timeIntervalSinceNow))
+        guard remaining > 0 else { break }
+        self.message = "Photo in \(remaining)…"
+        do { try await Task.sleep(nanoseconds: 1_000_000_000) } catch { return }
+      }
+      guard !Task.isCancelled, self.generation == request, self.canUseCamera, self.phase == "countdown" else { return }
+      self.photoTimerTask = nil
+      self.phase = "idle"
+      self.capturePhotoNow()
+    }
+  }
+
+  private func capturePhotoNow() {
+    guard canUseCamera, ready, !busy, !configuring, phase != "pending", settings.photo else { return }
     phase = "capturing"
     message = ""
     let angle = captureAngle
+    let requestedFlash: AVCaptureDevice.FlashMode = flashMode == "on" ? .on : flashMode == "auto" ? .auto : .off
     queue.async {
       guard self.session.isRunning, !self.session.isInterrupted else {
         DispatchQueue.main.async { self.phase = "error"; self.message = "Camera interrupted. Try again."; self.endBackgroundTask(); self.completeClose() }
@@ -536,7 +655,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: heic ? AVVideoCodecType.hevc : .jpeg])
       settings.maxPhotoDimensions = self.photo.maxPhotoDimensions
       settings.photoQualityPrioritization = .quality
-      if self.photo.supportedFlashModes.contains(.auto) { settings.flashMode = .auto }
+      if self.photo.supportedFlashModes.contains(requestedFlash) { settings.flashMode = requestedFlash }
       self.finishing = true
       let capture = ApplePhotoCapture { data, error in
         self.queue.async {
@@ -666,6 +785,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   func requestClose() {
+    cancelTimer()
     if busy {
       closeAfterSave = true
       stopRecording()
@@ -691,6 +811,8 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   private func suspend() {
+    cancelTimer()
+    showExposure = false
     if let action = remoteAction, action.hasPrefix("mode-") || action.hasPrefix("{") {
       completeRemote(.failure(CaptureFailure("Camera interrupted. Reopen Camera to change settings.")))
     }

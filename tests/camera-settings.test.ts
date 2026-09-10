@@ -45,3 +45,32 @@ test('bounded control messages fit a large native catalog without allowing unbou
   assert.ok(parseCaptureState(parseMessage(message)?.state));
   assert.equal(parseMessage(JSON.stringify({ padding: 'x'.repeat(32768) })), null);
 });
+
+test('exposure and timer capabilities remain bounded and older peers remain compatible', () => {
+  const controls = {
+    exposure: 0,
+    minExposure: -2,
+    maxExposure: 2,
+    timer: 3,
+    flash: 'auto',
+    hasFlash: true,
+  };
+  assert.deepEqual(parseCameraSettings({ ...settings, controls })?.controls, controls);
+  assert.ok(parseCameraSettings(settings));
+  assert.equal(
+    parseCameraSettings({ ...settings, controls: { ...controls, timerLight: false } })?.controls
+      ?.timerLight,
+    false,
+  );
+  for (const patch of [
+    { exposure: 3 },
+    { minExposure: 4 },
+    { maxExposure: NaN },
+    { timer: 5 },
+    { timer: '3' },
+    { flash: 'true' },
+    { hasFlash: 1 },
+    { timerLight: 1 },
+  ])
+    assert.equal(parseCameraSettings({ ...settings, controls: { ...controls, ...patch } }), null);
+});

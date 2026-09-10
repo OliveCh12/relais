@@ -9,6 +9,7 @@ export type CaptureAction =
   | 'photo'
   | 'start'
   | 'stop'
+  | 'cancel-timer'
   | 'retry-save'
   | 'mode-photo'
   | 'mode-video'
@@ -41,6 +42,7 @@ const actions = new Set<string>([
   'photo',
   'start',
   'stop',
+  'cancel-timer',
   'retry-save',
   'mode-photo',
   'mode-video',
@@ -106,6 +108,7 @@ export function parseCaptureState(value: unknown): CaptureState | null {
       'starting',
       'recording',
       'stopping',
+      'countdown',
       'capturing',
       'saving',
       'saved',

@@ -1,5 +1,9 @@
+import { Keyboard } from 'react-native';
 import { useEffect, useRef } from 'react';
 import {
+  ModalBottomSheet,
+  Button,
+  CircularProgressIndicator,
   DropdownMenu,
   DropdownMenuItem,
   Slider,
@@ -16,12 +20,14 @@ import {
   useNativeState,
 } from '@expo/ui/jetpack-compose';
 import {
+  size,
+  defaultMinSize,
   clickable,
-  fillMaxSize,
   fillMaxWidth,
   paddingAll,
   verticalScroll,
 } from '@expo/ui/jetpack-compose/modifiers';
+import { useNameWriter } from './useNameWriter';
 import { NativeIcon } from './icons/Icon.android';
 import type { SettingsPageProps, SettingsRow } from './SettingsPage.types';
 
@@ -42,6 +48,51 @@ function Field({ row }: { row: Extract<SettingsRow, { kind: 'field' }> }) {
       <TextButton onClick={() => row.onSave(value.get())}>
         <Text>{row.saveLabel}</Text>
       </TextButton>
+    </Column>
+  );
+}
+
+function NameField({ row }: { row: Extract<SettingsRow, { kind: 'name' }> }) {
+  const value = useNativeState(row.value);
+  const writer = useNameWriter(row.value, row.onSave);
+  const save = () => writer.save(value.get());
+  return (
+    <Column modifiers={[paddingAll(16)]}>
+      <OutlinedTextField
+        value={value}
+        maxLength={60}
+        singleLine
+        modifiers={[fillMaxWidth()]}
+        keyboardOptions={{ imeAction: 'done' }}
+        keyboardActions={{
+          onDone: () => {
+            save();
+            Keyboard.dismiss();
+          },
+        }}
+        onFocusChanged={(focused) => {
+          if (!focused) save();
+        }}
+        isError={writer.state.status === 'error'}
+      >
+        <OutlinedTextField.Label>
+          <Text>{row.label}</Text>
+        </OutlinedTextField.Label>
+        <OutlinedTextField.TrailingIcon>
+          {writer.state.status === 'saving' ? (
+            <CircularProgressIndicator modifiers={[size(20, 20)]} />
+          ) : writer.state.status === 'saved' ? (
+            <NativeIcon name="check" label="Name saved" size={20} />
+          ) : (
+            <Text>{''}</Text>
+          )}
+        </OutlinedTextField.TrailingIcon>
+        {writer.state.message && (
+          <OutlinedTextField.SupportingText>
+            <Text>{writer.state.message}</Text>
+          </OutlinedTextField.SupportingText>
+        )}
+      </OutlinedTextField>
     </Column>
   );
 }
@@ -97,84 +148,121 @@ function Range({ row }: { row: Extract<SettingsRow, { kind: 'slider' }> }) {
   );
 }
 
-export function SettingsPage({ sections, content }: SettingsPageProps) {
+export function SettingsContent({ sections, content, header }: SettingsPageProps) {
   const colors = useMaterialColors();
   return (
-    <Host style={{ flex: 1 }}>
-      <Column
-        modifiers={[fillMaxSize(), verticalScroll(), paddingAll(16)]}
-        verticalArrangement={{ spacedBy: 16 }}
-      >
-        {sections.map((section) => (
-          <Column key={section.title} verticalArrangement={{ spacedBy: 8 }}>
-            <Text color={colors.primary} style={{ typography: 'labelLarge' }}>
-              {section.title}
+    <Column
+      modifiers={[fillMaxWidth(), verticalScroll(), paddingAll(16)]}
+      verticalArrangement={{ spacedBy: 16 }}
+    >
+      {header && (
+        <Card>
+          <Column modifiers={[paddingAll(20)]} verticalArrangement={{ spacedBy: 12 }}>
+            <NativeIcon name={header.icon} size={36} color={colors.primary} />
+            <Text style={{ typography: 'headlineSmall' }}>{header.title}</Text>
+            <Text color={colors.onSurfaceVariant} style={{ typography: 'bodyMedium' }}>
+              {header.subtitle}
             </Text>
-            {section.rows.length > 0 && (
-              <Card>
-                <Column>
-                  {section.rows.map((row) =>
-                    row.kind === 'choice' ? (
-                      <Choice key={row.label} row={row} />
-                    ) : row.kind === 'slider' ? (
-                      <Range key={row.label} row={row} />
-                    ) : row.kind === 'field' ? (
-                      <Field key={`${row.label}:${row.value}`} row={row} />
-                    ) : (
-                      <ListItem
-                        key={row.label}
-                        colors={{ containerColor: 'transparent' }}
-                        modifiers={
-                          row.kind === 'action' && !row.disabled ? [clickable(row.onPress)] : []
-                        }
-                      >
-                        {'icon' in row && row.icon && (
-                          <ListItem.LeadingContent>
-                            <NativeIcon name={row.icon} color={colors.primary} />
-                          </ListItem.LeadingContent>
-                        )}
-                        <ListItem.HeadlineContent>
-                          <Text
-                            color={
-                              row.kind === 'action' && row.destructive
-                                ? colors.error
-                                : row.kind === 'action' && row.disabled
-                                  ? colors.onSurfaceVariant
-                                  : colors.onSurface
-                            }
-                          >
-                            {row.label}
-                          </Text>
-                        </ListItem.HeadlineContent>
-                        {row.kind === 'value' && (
-                          <ListItem.SupportingContent>
-                            <Text>{row.value}</Text>
-                          </ListItem.SupportingContent>
-                        )}
-                        {row.kind === 'toggle' && (
-                          <ListItem.TrailingContent>
-                            <Switch
-                              value={row.value}
-                              onCheckedChange={row.onChange}
-                              enabled={!row.disabled}
-                            />
-                          </ListItem.TrailingContent>
-                        )}
-                      </ListItem>
-                    ),
-                  )}
-                </Column>
-              </Card>
-            )}
-            {section.footer && (
-              <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
-                {section.footer}
-              </Text>
-            )}
           </Column>
-        ))}
-        {content && <RNHostView matchContents>{content}</RNHostView>}
-      </Column>
+        </Card>
+      )}
+      {sections.map((section) => (
+        <Column key={section.title} verticalArrangement={{ spacedBy: 8 }}>
+          <Text color={colors.primary} style={{ typography: 'labelLarge' }}>
+            {section.title}
+          </Text>
+          {section.rows.length > 0 && (
+            <Card>
+              <Column>
+                {section.rows.map((row) =>
+                  row.kind === 'action' && row.prominent ? (
+                    <Button
+                      key={row.label}
+                      onClick={row.onPress}
+                      enabled={!row.disabled}
+                      modifiers={[paddingAll(8), fillMaxWidth(), defaultMinSize({ minHeight: 56 })]}
+                    >
+                      {row.icon && <NativeIcon name={row.icon} size={20} />}
+                      <Text>{`  ${row.label}`}</Text>
+                    </Button>
+                  ) : row.kind === 'name' ? (
+                    <NameField key={row.id} row={row} />
+                  ) : row.kind === 'choice' ? (
+                    <Choice key={row.label} row={row} />
+                  ) : row.kind === 'slider' ? (
+                    <Range key={row.label} row={row} />
+                  ) : row.kind === 'field' ? (
+                    <Field key={`${row.label}:${row.value}`} row={row} />
+                  ) : (
+                    <ListItem
+                      key={row.label}
+                      colors={{ containerColor: 'transparent' }}
+                      modifiers={
+                        row.kind === 'action' && !row.disabled ? [clickable(row.onPress)] : []
+                      }
+                    >
+                      {'icon' in row && row.icon && (
+                        <ListItem.LeadingContent>
+                          <NativeIcon name={row.icon} color={colors.primary} />
+                        </ListItem.LeadingContent>
+                      )}
+                      <ListItem.HeadlineContent>
+                        <Text
+                          color={
+                            row.kind === 'action' && row.destructive
+                              ? colors.error
+                              : row.kind === 'action' && row.disabled
+                                ? colors.onSurfaceVariant
+                                : colors.onSurface
+                          }
+                        >
+                          {row.label}
+                        </Text>
+                      </ListItem.HeadlineContent>
+                      {row.kind === 'value' && (
+                        <ListItem.SupportingContent>
+                          <Text>{row.value}</Text>
+                        </ListItem.SupportingContent>
+                      )}
+                      {row.kind === 'toggle' && (
+                        <ListItem.TrailingContent>
+                          <Switch
+                            value={row.value}
+                            onCheckedChange={row.onChange}
+                            enabled={!row.disabled}
+                          />
+                        </ListItem.TrailingContent>
+                      )}
+                    </ListItem>
+                  ),
+                )}
+              </Column>
+            </Card>
+          )}
+          {section.footer && (
+            <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
+              {section.footer}
+            </Text>
+          )}
+        </Column>
+      ))}
+      {content && <RNHostView matchContents>{content}</RNHostView>}
+    </Column>
+  );
+}
+
+export function SettingsPage(props: SettingsPageProps) {
+  if (props.presentation === 'sheet')
+    return (
+      <Host colorScheme="dark" style={{ flex: 1 }}>
+        <ModalBottomSheet skipPartiallyExpanded onDismissRequest={props.onDismiss ?? (() => {})}>
+          <SettingsContent {...props} />
+        </ModalBottomSheet>
+      </Host>
+    );
+  return (
+    <Host style={{ flex: 1 }}>
+      <SettingsContent {...props} />
     </Host>
   );
 }

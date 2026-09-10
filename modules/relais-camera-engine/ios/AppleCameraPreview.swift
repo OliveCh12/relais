@@ -40,10 +40,11 @@ final class ApplePreviewSurface: UIView {
     grid.fillColor = UIColor.clear.cgColor
     grid.lineWidth = 0.5
     layer.addSublayer(grid)
+    addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tap(_:))))
     addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:))))
     isAccessibilityElement = true
     accessibilityLabel = "Camera viewfinder"
-    accessibilityHint = "Focus and exposure adjust automatically. Pinch to zoom."
+    accessibilityHint = "Tap to adjust focus and brightness. Pinch to zoom."
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -103,6 +104,13 @@ final class ApplePreviewSurface: UIView {
     }
     preview.connection?.automaticallyAdjustsVideoMirroring = false
     if preview.connection?.isVideoMirroringSupported == true { preview.connection?.isVideoMirrored = device.position == .front }
+  }
+
+  @objc private func tap(_ recognizer: UITapGestureRecognizer) {
+    let point = recognizer.location(in: self)
+    let content = preview.layerRectConverted(fromMetadataOutputRect: CGRect(x: 0, y: 0, width: 1, height: 1))
+    guard content.contains(point) else { return }
+    model?.meter(at: preview.captureDevicePointConverted(fromLayerPoint: point))
   }
 
   @objc private func pinch(_ recognizer: UIPinchGestureRecognizer) {

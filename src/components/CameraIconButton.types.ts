@@ -8,4 +8,5 @@ export interface CameraIconButtonProps {
   selected?: boolean;
   large?: boolean;
   photo?: boolean;
+  roundedSquare?: boolean;
 }

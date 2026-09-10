@@ -10,6 +10,14 @@ export type SettingsRow =
       onPress: () => void;
       disabled?: boolean;
       destructive?: boolean;
+      prominent?: boolean;
+    }
+  | {
+      kind: 'name';
+      id: string;
+      label: string;
+      value: string;
+      onSave: (value: string) => Promise<void>;
     }
   | {
       kind: 'field';
@@ -45,5 +53,8 @@ export type SettingsRow =
     };
 export interface SettingsPageProps {
   sections: { title: string; footer?: string; rows: SettingsRow[] }[];
+  presentation?: 'page' | 'sheet';
+  onDismiss?: () => void;
   content?: ReactElement;
+  header?: { title: string; subtitle: string; icon: IconName };
 }

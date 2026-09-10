@@ -1,6 +1,9 @@
+import type { CameraControls, CameraSetting } from '@/capture/settings';
 import type { RecordingProfile } from '../../modules/relais-camera-engine/src';
 
 export interface CameraOptionsProps {
+  controls?: CameraControls;
+  onSetting?: (setting: CameraSetting) => void;
   visible: boolean;
   onClose: () => void;
   audio: boolean;

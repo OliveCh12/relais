@@ -6,24 +6,23 @@ For new component work, consult the [native components and interaction-performan
 
 ## Current journey — September 10
 
-| Surface                   | iPhone                                                             | Android                                                                       |
-| ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Home                      | SwiftUI Form/Section with two action rows                          | Material ListItem with native actions                                         |
-| Camera modes              | Segmented Picker for Video / supported Cinematic                   | Video only; no unsupported photo/vendor modes                                 |
-| Camera actions            | SF Symbols and iOS 26 glass buttons, compatible system fallback    | Material IconButton; zoom above the shutter                                   |
-| Video settings            | NavigationStack/Form, menus, toggles and sliders                   | ModalBottomSheet; Video / Framing sections via SingleChoiceSegmentedButtonRow |
-| QR and options            | Expandable medium/large SwiftUI sheet; large sheet for readable QR | Content-sized, scrollable Material ModalBottomSheet                           |
-| Manual code / Mac address | Native TextField in a dedicated sheet                              | Native OutlinedTextField in a dedicated sheet                                 |
+| Surface              | iPhone                                                                    | Android                                                                        |
+| -------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Home                 | SwiftUI Form/Section                                                      | Material ListItem actions                                                      |
+| My cameras           | Native inset-grouped list, device icon and availability                   | Material Card/ListItem groups, circular device icons and availability          |
+| Device details       | Native auto-saving TextField, progress/check and prominent Connect Button | Native auto-saving OutlinedTextField, progress/check and filled Connect Button |
+| Navigation           | Native stack pages with Back for device, pairing and Info                 | Native stack pages with Back for device, pairing and Info                      |
+| Camera modes         | Segmented Picker: Photo, Video, supported Cinematic; swipe between modes  | Material segmented buttons: Photo/Video; swipe between modes                   |
+| Camera actions       | SwiftUI shutter, native gallery and SF Symbols                            | Circular shutter, rounded-square tonal gallery/flip buttons, Material Symbols  |
+| Camera settings      | NavigationStack/Form with native pickers, toggles and sliders             | Material ModalBottomSheet with grouped lists                                   |
+| Brightness and timer | Native exposure slider, toolbar timer and Photo settings                  | Material exposure slider, Photo timer and optional countdown light             |
+| Remote settings      | Native settings page identifying the capturing device                     | Native settings sheet identifying the capturing device                         |
 
-Home → **Camera** records locally. In development builds, Home → **Monitor** opens remembered devices, QR scanning and test video sharing. Release Monitor still enters the explicit demo pairing/fixture flow; the real product transport is not connected yet. The duplicate device-list entry was removed. Mac setup and manual code entry live in secondary options of the development flow.
+Home → Camera captures local originals and shares a reduced native preview. Home → Monitor lists saved devices. Tapping a device opens its details; Connect starts the paired session. Add camera, Scan code, Enter code, Connect a monitor, Info and connection setup are dedicated pages. The scanner unmounts before joining. The session provider retains the existing transport/camera owner across stack pages.
 
-The QR sheet opens when sharing becomes available. Dismissing it retains the session and preview; an action reopens it. It closes when the link connects. Only one connection sheet is presented at a time. The scanner unmounts before joining. The QR itself is SVG hosted inside the native sheet; gestures, fields and buttons belong to the platform.
+Connection and device pages follow the system theme; capture stays dark. Native controls animate themselves. No new UI dependency or video-frame processing in JavaScript was added. Signal statistics remain exclusive to Info.
 
-Connection and device-detail sheets follow the system theme, correcting white text on a light background found during iOS inspection. Capture remains dark. SwiftUI/Compose animate sheets and selectors; no new dependency or per-frame JS animation was added.
-
-Public native controls take priority over recreating private Camera app widgets. The camera-specific iOS shutter still uses composed SwiftUI content. References: [Apple segmented controls](https://developer.apple.com/design/human-interface-guidelines/segmented-controls), [Apple sheets](https://developer.apple.com/design/human-interface-guidelines/sheets), [Compose segmented buttons](https://developer.android.com/develop/ui/compose/components/segmented-button), [Compose sheets](https://developer.android.com/develop/ui/compose/components/bottom-sheets).
-
-This pass built and installed on signed iPhone, simulator and Android. iOS Home/options and Android Home/QR/Video/Framing were inspected. The Dev Client Tools button intercepted settings, so its Android default is now hidden through a CNG plugin. Dismissing the Android QR preserved `active=true`, `hasStream=true`, `panel=null`. Large text, screen readers, every sheet's rotation and 120 Hz measurements remain separate checks. Remote preview and native recording remain separate.
+The current [controls implementation and API limits](research/native-camera-controls.md) cover auto-saving names, native buttons, gallery access, exposure units, timers, remote control and native settings presentation. Public components take priority over recreating private camera-app widgets. Physical captures, visual acceptance, screen-reader checks and display-frame-rate measurement are owned by the user for this pass; build evidence is recorded in STATUS.md.
 
 ## Architecture and platform choices
 
@@ -47,7 +46,7 @@ Preserve explicit disconnected state, no fake images, disabled unsupported recor
 
 ## Camera-app references and reuse limits
 
-Apple Camera organizes capture around a central lower recording action, upper camera/format controls and zoom near the viewfinder. Relais follows that hierarchy: dominant image, one recording action, accessible zoom/lenses and secondary settings. Photo/panorama modes are not added just to resemble a reference. [iPhone recording guide](https://support.apple.com/guide/iphone/record-videos-iph61f49e4bb/ios).
+Apple Camera organizes capture around a central lower recording action, upper camera/format controls and zoom near the viewfinder. Relais follows that hierarchy: dominant image, one recording action, accessible zoom/lenses and secondary settings. Unsupported modes are not added just to resemble a reference. [iPhone recording guide](https://support.apple.com/guide/iphone/record-videos-iph61f49e4bb/ios).
 
 Pixel Camera groups video resolution/frame rate in settings near the recording controls. Relais uses a thumb-accessible Material sheet. Pixel stabilization and advanced processing do not become available merely by adopting its layout. [Pixel video guide](https://support.google.com/pixelcamera/answer/7064897?hl=en).
 

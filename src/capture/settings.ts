@@ -1,3 +1,12 @@
+export interface CameraControls {
+  timerLight?: boolean;
+  exposure: number;
+  minExposure: number;
+  maxExposure: number;
+  timer: 0 | 3 | 10;
+  flash: 'auto' | 'off' | 'on';
+  hasFlash: boolean;
+}
 export interface CameraProfile {
   id: string;
   height: number;
@@ -5,6 +14,7 @@ export interface CameraProfile {
   hdr: boolean;
 }
 export interface CameraSettings {
+  controls?: CameraControls;
   revision: number;
   profiles: CameraProfile[];
   profile: string | null;
@@ -21,9 +31,11 @@ export interface CameraSettings {
 }
 export type CameraSetting =
   | { key: 'profile'; value: string }
-  | { key: 'audio' | 'grid' | 'stabilization'; value: boolean }
+  | { key: 'audio' | 'grid' | 'stabilization' | 'timerLight'; value: boolean }
   | { key: 'position'; value: 'front' | 'back' }
-  | { key: 'zoom'; value: number };
+  | { key: 'zoom' | 'exposure'; value: number }
+  | { key: 'timer'; value: 0 | 3 | 10 }
+  | { key: 'flash'; value: 'auto' | 'off' | 'on' };
 export type SettingsAction = CameraSetting & { type: 'settings'; revision: number };
 export const profileId = (profile: { height: number; fps: number; hdr: boolean }) =>
   `${profile.height}-${profile.fps}-${profile.hdr}`;
@@ -44,10 +56,13 @@ export function parseSettingsAction(value: unknown): SettingsAction | null {
       typeof v.value === 'string' &&
       /^\d{2,5}-\d{1,3}-(true|false)$/.test(v.value)) ||
     (typeof v.key === 'string' &&
-      ['audio', 'grid', 'stabilization'].includes(v.key) &&
+      ['audio', 'grid', 'stabilization', 'timerLight'].includes(v.key) &&
       typeof v.value === 'boolean') ||
     (v.key === 'position' && typeof v.value === 'string' && ['front', 'back'].includes(v.value)) ||
-    (v.key === 'zoom' && finite(v.value, 0.1, 1000));
+    (v.key === 'zoom' && finite(v.value, 0.1, 1000)) ||
+    (v.key === 'exposure' && finite(v.value, -20, 20)) ||
+    (v.key === 'timer' && [0, 3, 10].includes(v.value as number)) ||
+    (v.key === 'flash' && ['auto', 'off', 'on'].includes(v.value as string));
   return valid
     ? ({ type: 'settings', revision: v.revision, key: v.key, value: v.value } as SettingsAction)
     : null;
@@ -84,7 +99,33 @@ export function parseCameraSettings(value: unknown): CameraSettings | null {
     !s.zoomStops.every((z) => finite(z, s.minZoom, s.maxZoom))
   )
     return null;
+  const controls = s.controls;
+  if (
+    controls !== undefined &&
+    (!controls ||
+      !finite(controls.minExposure, -20, 20) ||
+      !finite(controls.maxExposure, controls.minExposure, 20) ||
+      !finite(controls.exposure, controls.minExposure, controls.maxExposure) ||
+      ![0, 3, 10].includes(controls.timer) ||
+      !['auto', 'off', 'on'].includes(controls.flash) ||
+      typeof controls.hasFlash !== 'boolean' ||
+      (controls.timerLight !== undefined && typeof controls.timerLight !== 'boolean'))
+  )
+    return null;
   return {
+    ...(controls
+      ? {
+          controls: {
+            ...(controls.timerLight === undefined ? {} : { timerLight: controls.timerLight }),
+            exposure: controls.exposure,
+            minExposure: controls.minExposure,
+            maxExposure: controls.maxExposure,
+            timer: controls.timer,
+            flash: controls.flash,
+            hasFlash: controls.hasFlash,
+          },
+        }
+      : {}),
     revision: s.revision,
     profiles: s.profiles.map(({ id, height, fps, hdr }) => ({ id, height, fps, hdr })),
     profile: s.profile,

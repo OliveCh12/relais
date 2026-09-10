@@ -7,6 +7,8 @@ import type {
 import type { CaptureState } from '../../../src/capture/protocol';
 
 declare class RelaisCameraEngineModule extends NativeModule<CameraEventListeners> {
+  openGallery(): Promise<void>;
+  getExposureStep(deviceId: string): Promise<number>;
   initializePreviewOutput(): void;
   createPreviewTrack(): Promise<{
     id: string;

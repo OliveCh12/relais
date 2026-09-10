@@ -51,6 +51,7 @@ export function useConnection(
   const metricsEnabled = useRef(false);
   const pending = useRef<{
     id: string;
+    action: CaptureAction;
     resolve: () => void;
     reject: (error: Error) => void;
     timer: ReturnType<typeof setTimeout>;
@@ -253,6 +254,11 @@ export function useConnection(
           reject(new Error('Connect to your camera first.'));
           return;
         }
+        if (pending.current?.action === 'photo' && action === 'cancel-timer') {
+          clearTimeout(pending.current.timer);
+          pending.current.resolve();
+          pending.current = null;
+        }
         if (pending.current) {
           reject(new Error('Wait for the camera to respond.'));
           return;
@@ -266,7 +272,7 @@ export function useConnection(
             new Error('The camera has not confirmed this action. Check it before trying again.'),
           );
         }, 95_000);
-        pending.current = { id, resolve, reject, timer };
+        pending.current = { id, action, resolve, reject, timer };
         setSending(true);
         try {
           session.current.send(

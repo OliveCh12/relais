@@ -1,5 +1,8 @@
 package expo.modules.relaiscameraengine
 
+import android.content.Intent
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -9,6 +12,19 @@ import org.json.JSONObject
 class RelaisCameraEngineModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("RelaisCameraEngine")
+    AsyncFunction("openGallery") {
+      val context = appContext.reactContext ?: throw IllegalStateException("Camera is unavailable.")
+      val intent = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_GALLERY)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      context.startActivity(intent)
+    }
+
+    AsyncFunction("getExposureStep") { deviceId: String ->
+      val context = appContext.reactContext ?: throw IllegalStateException("Camera is unavailable.")
+      val manager = context.getSystemService(CameraManager::class.java)
+      manager.getCameraCharacteristics(deviceId)
+        .get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)?.toDouble() ?: 0.0
+    }
     Function("initializePreviewOutput") {
       System.loadLibrary("VisionCamera")
       System.loadLibrary("RelaisPreview")
