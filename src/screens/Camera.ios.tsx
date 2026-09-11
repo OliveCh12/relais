@@ -3,7 +3,7 @@ import { requireNativeModule, requireNativeView } from 'expo';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, type ViewProps } from 'react-native';
-import NativeEngine from '../../modules/relais-camera-engine/src';
+import NativeEngine from '../../modules/relais-camera-engine/src/ios/CameraModule';
 import { parseCaptureState } from '@/capture/protocol';
 import { useCaptureSession } from '@/capture/SessionContext';
 

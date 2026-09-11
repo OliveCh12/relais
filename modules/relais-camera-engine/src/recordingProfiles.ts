@@ -1,4 +1,8 @@
-import type { RecordingProfile } from './index';
+export interface RecordingProfile {
+  height: number;
+  fps: number;
+  hdr: boolean;
+}
 
 export function closestRecordingProfile(
   profiles: RecordingProfile[],

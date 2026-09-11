@@ -54,7 +54,7 @@ The historical remote-quality draft lives in `src/capabilities/selection.ts` and
 
 ## Camera ownership and files
 
-`AppleCameraModel` owns one AVFoundation session and `AVCapturePhotoOutput` or `AVCaptureMovieFileOutput`, plus native video-data preview, on iOS. `LocalCamera.tsx` owns one VisionCamera v5 / CameraX session on Android. Direct AVFoundation replaced iOS VisionCamera to access public iOS 26 Cinematic capture. Never mount the QR scanner, spike camera and local camera simultaneously.
+`AppleCameraModel` owns one AVFoundation session and `AVCapturePhotoOutput` or `AVCaptureMovieFileOutput`, plus native video-data preview, on iOS. `modules/relais-camera-engine/src/android/LocalCamera.tsx` owns one VisionCamera v5 / CameraX session on Android. The platform bindings live in `src/ios/CameraModule.ts` and `src/android/CameraModule.ts` inside the module; the shared Monitor/command layer does not import either owner. Direct AVFoundation replaced iOS VisionCamera to access public iOS 26 Cinematic capture. Never mount the QR scanner, spike camera and local camera simultaneously. [Platform boundaries, maximum quality and public API limitations](research/platform-camera-architecture.md).
 
 Local profiles come from AVFoundation formats and CameraX Preview/VideoCapture/ImageAnalysis compatibility checks, not Monitor fixtures. After native finalization, PhotoKit/MediaStore imports the file. Failed imports preserve its private copy. A reduced native WebRTC output serves the Monitor without a second camera owner. [Native API decisions](research/native-camera-capabilities.md).
 

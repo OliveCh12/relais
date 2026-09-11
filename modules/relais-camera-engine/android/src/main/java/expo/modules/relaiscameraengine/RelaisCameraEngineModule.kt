@@ -1,22 +1,40 @@
 package expo.modules.relaiscameraengine
 
-import android.content.Intent
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.net.Uri
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
 import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
 class RelaisCameraEngineModule : Module() {
+  private var galleryOpen = false
+
   override fun definition() = ModuleDefinition {
     Name("RelaisCameraEngine")
-    AsyncFunction("openGallery") {
-      val context = appContext.reactContext ?: throw IllegalStateException("Camera is unavailable.")
-      val intent = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_GALLERY)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      context.startActivity(intent)
+    lateinit var galleryLauncher: AppContextActivityResultLauncher<GalleryPickerRequest, Uri?>
+    RegisterActivityContracts {
+      galleryLauncher = registerForActivityResult(GalleryPickerContract())
+    }
+    AsyncFunction("openGallery") Coroutine { ->
+      withContext(Dispatchers.Main) {
+        if (galleryOpen) return@withContext
+        if (appContext.currentActivity == null) throw GalleryException("Open Relais before viewing your captures.")
+        galleryOpen = true
+        try {
+          val uri = galleryLauncher.launch(GalleryPickerRequest()) ?: return@withContext
+          val activity = appContext.currentActivity ?: return@withContext
+          viewGallerySelection(activity, uri)
+        } finally {
+          galleryOpen = false
+        }
+      }
     }
 
     AsyncFunction("getExposureStep") { deviceId: String ->

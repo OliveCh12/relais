@@ -72,6 +72,13 @@ export function CameraOptions(props: CameraOptionsProps) {
         },
         {
           kind: 'toggle',
+          label: 'Video stabilization',
+          value: props.stabilization,
+          disabled: props.disabled || !props.canStabilize,
+          onChange: (value) => props.onSetting?.({ key: 'stabilization', value }),
+        },
+        {
+          kind: 'toggle',
           label: 'Record audio',
           value: props.audio,
           disabled: props.disabled,

@@ -1,4 +1,4 @@
-import NativeEngine from '../../modules/relais-camera-engine/src';
+import NativeEngine from '../../modules/relais-camera-engine/src/android/CameraModule';
 import { ViewfinderGesture } from '@/components/ViewfinderGesture';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -17,7 +17,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import {
   LocalCameraPreview,
   useLocalCameraEngine,
-} from '../../modules/relais-camera-engine/src/LocalCamera';
+} from '../../modules/relais-camera-engine/src/android/LocalCamera';
 import { CameraIconButton } from '@/components/CameraIconButton';
 import { CameraOptions } from '@/components/CameraOptions';
 import { ActionButton } from '@/components/ActionButton';
@@ -321,11 +321,13 @@ export default function CameraScreen() {
           )
         }
         audio={engine.audio}
+        stabilization={engine.captureState.settings?.stabilization ?? false}
+        canStabilize={engine.captureState.settings?.canStabilize ?? false}
         onAudio={(value) => act(() => engine.setMicrophone(value))}
         grid={grid}
         onGrid={setGrid}
         quality={engine.quality}
-        disabled={engine.busy}
+        disabled={engine.busy || !engine.ready}
         profiles={engine.profiles}
         selectedProfile={engine.selectedProfile}
         onProfile={engine.selectProfile}

@@ -24,6 +24,7 @@ object RecordingProfiles {
       for (quality in capabilities.getSupportedQualities(dynamicRange)) {
         val height = when (quality) {
           Quality.UHD -> 2160
+          Quality.QHD -> 1440
           Quality.FHD -> 1080
           Quality.HD -> 720
           Quality.SD -> 480

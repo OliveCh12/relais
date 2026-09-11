@@ -1,5 +1,5 @@
 import type { CameraControls, CameraSetting } from '@/capture/settings';
-import type { RecordingProfile } from '../../modules/relais-camera-engine/src';
+import type { RecordingProfile } from '../../modules/relais-camera-engine/src/recordingProfiles';
 
 export interface CameraOptionsProps {
   controls?: CameraControls;
@@ -8,6 +8,8 @@ export interface CameraOptionsProps {
   onClose: () => void;
   audio: boolean;
   onAudio: (value: boolean) => void;
+  stabilization: boolean;
+  canStabilize: boolean;
   grid: boolean;
   onGrid: (value: boolean) => void;
   quality: string;

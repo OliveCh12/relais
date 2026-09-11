@@ -1,4 +1,4 @@
-import { unrotatePoint, type Point } from '../../../src/capture/viewfinder';
+import { unrotatePoint, type Point } from '../../../../src/capture/viewfinder';
 import {
   useCallback,
   useEffect,
@@ -22,12 +22,13 @@ import {
   type CameraOutput,
 } from 'react-native-vision-camera';
 import { NitroModules } from 'react-native-nitro-modules';
-import type { CaptureAction, CaptureMode, CaptureState } from '../../../src/capture/protocol';
-import { PhotoTimer } from '../../../src/capture/PhotoTimer';
-import { profileId, type SettingsAction } from '../../../src/capture/settings';
-import NativeEngine, { type RecordingProfile } from './index';
-import { RecordingController } from './RecordingController';
-import { closestRecordingProfile, recordingResolutionLabel } from './recordingProfiles';
+import type { CaptureAction, CaptureMode, CaptureState } from '../../../../src/capture/protocol';
+import { PhotoTimer } from '../../../../src/capture/PhotoTimer';
+import { profileId, type SettingsAction } from '../../../../src/capture/settings';
+import NativeEngine from './CameraModule';
+import type { RecordingProfile } from '../recordingProfiles';
+import { RecordingController } from '../RecordingController';
+import { closestRecordingProfile, recordingResolutionLabel } from '../recordingProfiles';
 
 const PHOTO_RESOLUTION = { width: 8192, height: 6144 };
 

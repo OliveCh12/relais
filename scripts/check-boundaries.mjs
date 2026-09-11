@@ -19,7 +19,7 @@ async function visit(directory) {
         const name = node.moduleSpecifier.text;
         if (!spike && /spikes\//.test(name)) errors.push(`${path}: spike import in product code`);
         const localCameraOwner =
-          path === 'modules/relais-camera-engine/src/LocalCamera.tsx' &&
+          path === 'modules/relais-camera-engine/src/android/LocalCamera.tsx' &&
           name === 'react-native-vision-camera';
         const nativeTransport =
           [
@@ -34,6 +34,20 @@ async function visit(directory) {
           /react-native-(webrtc|vision-camera)/.test(name)
         )
           errors.push(`${path}: direct native camera/transport access`);
+        if (
+          (path.endsWith('.ios.tsx') || path.endsWith('.ios.ts') || path.includes('/src/ios/')) &&
+          /\/android\//.test(name)
+        )
+          errors.push(`${path}: Android camera import in iOS code`);
+        if (
+          (path.endsWith('.android.tsx') ||
+            path.endsWith('.android.ts') ||
+            path.includes('/src/android/')) &&
+          /\/ios\//.test(name)
+        )
+          errors.push(`${path}: iOS camera import in Android code`);
+        if (path.startsWith('src/capture/') && /\/(android|ios)\//.test(name))
+          errors.push(`${path}: platform camera import in the shared command protocol`);
         if (path.startsWith('src/domain/') && /react|expo|camera\/native/.test(name))
           errors.push(`${path}: forbidden domain dependency`);
       }

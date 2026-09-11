@@ -2,7 +2,9 @@ pnpm-lock.yaml
 node_modules
 .expo
 dist
-ios
-android
+/ios/
+/android/
+modules/*/android/build/
+modules/*/android/.cxx/
 .native-tools
 .gradle

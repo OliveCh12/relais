@@ -128,3 +128,21 @@ test('preferred quality selects only advertised combinations, preserving HDR and
     undefined,
   );
 });
+
+test('best available follows the camera catalog above 4K60 and includes intermediate resolutions', () => {
+  const advertised = [...profiles, { id: '2160-120-false', height: 2160, fps: 120, hdr: false }];
+  const withProfiles = (next: typeof profiles): CaptureState => ({
+    ...camera,
+    settings: { ...camera.settings!, profiles: next },
+  });
+  assert.equal(preferredProfile(withProfiles(advertised), 'best')?.id, '2160-120-false');
+  // A future native engine may advertise 8K; the Monitor must not impose a 4K ceiling.
+  const higherResolution = { id: '4320-30-false', height: 4320, fps: 30, hdr: false };
+  assert.equal(
+    preferredProfile(withProfiles([...advertised, higherResolution]), 'best')?.id,
+    higherResolution.id,
+  );
+  const qhd = { id: '1440-60-false', height: 1440, fps: 60, hdr: false };
+  assert.equal(preferredProfile(withProfiles([profiles[0]!, qhd]), 'best')?.id, qhd.id);
+  assert.equal(preferredProfile(withProfiles(advertised), 'balanced')?.id, '1080-30-false');
+});

@@ -11,7 +11,7 @@ export const qualityOptions = [
   {
     value: 'best' as const,
     label: 'Best available',
-    subtitle: 'Aim for 4K at 60 fps, with the best compatible fallback.',
+    subtitle: 'Use the highest supported resolution, then its highest frame rate.',
   },
   {
     value: 'balanced' as const,
