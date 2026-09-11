@@ -165,11 +165,12 @@ export class DeviceRegistry {
       const previous = this.devices.find((item) => item.id === id);
       if (!previous || JSON.stringify(previous.camera) === JSON.stringify(camera)) return;
       const profiles = camera.settings!.profiles.map((profile) => profile.id);
-      for (const part of [0, 1])
-        await this.storage.set(
-          `relais.profiles.${id}.${part}`,
-          JSON.stringify(profiles.slice(part * 64, (part + 1) * 64)),
-        );
+      const previousProfiles = previous.camera?.settings?.profiles.map((profile) => profile.id);
+      for (const part of [0, 1]) {
+        const chunk = JSON.stringify(profiles.slice(part * 64, (part + 1) * 64));
+        if (chunk !== JSON.stringify(previousProfiles?.slice(part * 64, (part + 1) * 64)))
+          await this.storage.set(`relais.profiles.${id}.${part}`, chunk);
+      }
       await this.storage.set(
         `relais.camera.${id}`,
         JSON.stringify({ ...camera, settings: { ...camera.settings, profiles: [] } }),

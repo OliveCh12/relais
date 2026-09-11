@@ -102,3 +102,45 @@ test('camera preferences survive restart/re-pairing while corrupt cache never lo
   await recovered.forget(device.id);
   assert.ok(![...values.keys()].some((key) => key.includes(device.id)));
 });
+
+test('caching a setting edit does not rewrite unchanged native format chunks', async () => {
+  const values = new Map<string, string>();
+  const writes: string[] = [];
+  const storage: DeviceStorage = {
+    get: async (key) => values.get(key) ?? null,
+    set: async (key, value) => {
+      writes.push(key);
+      values.set(key, value);
+    },
+    remove: async (key) => {
+      values.delete(key);
+    },
+  };
+  const create = () =>
+    new DeviceRegistry(storage, async (bytes) => '1'.repeat(bytes * 2), 'Monitor');
+  const registry = create();
+  const id = 'a'.repeat(32);
+  await registry.remember({
+    id,
+    name: 'Camera',
+    pairId: 'b'.repeat(32),
+    secret: 'c'.repeat(48),
+    server: 'http://192.168.1.2:8787',
+    lastConnectedAt: 10,
+  });
+  await registry.cacheCamera(id, camera);
+  writes.length = 0;
+  const changed = { ...camera, settings: { ...camera.settings!, grid: true, revision: 4 } };
+  await registry.cacheCamera(id, changed);
+  assert.deepEqual(writes, [`relais.camera.${id}`]);
+  writes.length = 0;
+  await registry.cacheCamera(id, changed);
+  assert.deepEqual(writes, []);
+  const restarted = create();
+  await restarted.load();
+  assert.equal(restarted.getSnapshot()[0]?.camera?.settings?.grid, true);
+  assert.deepEqual(
+    restarted.getSnapshot()[0]?.camera?.settings?.profiles,
+    camera.settings?.profiles,
+  );
+});

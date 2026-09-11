@@ -31,7 +31,12 @@ const choiceIcons: Record<string, IconName> = {
   'Frame rate': 'video',
 };
 
+const reportedErrors = new WeakSet<Error>();
 function report(error: unknown) {
+  if (error instanceof Error) {
+    if (reportedErrors.has(error)) return;
+    reportedErrors.add(error);
+  }
   Alert.alert('Camera settings', error instanceof Error ? error.message : 'Please try again.');
 }
 export default function DeviceScreen() {
@@ -42,7 +47,11 @@ export default function DeviceScreen() {
   const id = params.id || connection.device?.id;
   const focused = useIsFocused();
   const connected = connection.connected && connection.device?.id === id;
-  const devices = useDevices(connection.server, focused && !connected, id);
+  const devices = useDevices(
+    connection.server,
+    focused && !connected && (!page || page === 'connection'),
+    id,
+  );
   const row = devices.rows.find((item) => item.device.id === id);
   const saved = row?.device;
   const theme = useAppTheme();
@@ -53,7 +62,7 @@ export default function DeviceScreen() {
     return () => setMetricsEnabled(false);
   }, [focused, connected, page, setMetricsEnabled]);
   const state = connected
-    ? connection.remote
+    ? connection.settingsPreview
     : saved?.camera
       ? previewPreset(saved.camera, saved.preset)
       : null;
@@ -124,11 +133,15 @@ export default function DeviceScreen() {
         params: { id, page, ...(field ? { field } : {}) },
       });
   };
-  const disabled = applyingPreset || (connected && (connection.sending || !state?.canCapture));
+  const configuring = connection.settingsPending && ['idle', 'saved'].includes(state?.phase ?? '');
+  const capturePending = connection.sending && !connection.settingsPending;
+  const disabled =
+    applyingPreset || (connected && (capturePending || (!state?.canCapture && !configuring)));
   const framingDisabled =
     applyingPreset ||
     (connected &&
-      (connection.sending || !state?.ready || !(state.canCapture || state.phase === 'recording')));
+      (capturePending ||
+        ((!state?.ready || !(state.canCapture || state.phase === 'recording')) && !configuring)));
   const categories = state
     ? remoteSettingsSections(state, command, disabled, framingDisabled).filter(
         (section) => section.id,
@@ -175,7 +188,7 @@ export default function DeviceScreen() {
           : 'Connect to load the video formats available with this mode and lens.',
     });
   const context = connected
-    ? `Changes apply to ${saved?.name ?? 'the camera phone'}. Originals stay in its gallery.`
+    ? `${connection.settingsPending ? 'Applying changes… ' : ''}Changes apply to ${saved?.name ?? 'the camera phone'}. Originals stay in its gallery.`
     : 'Changes are saved for this camera and applied when you connect. Available formats are checked again on the camera phone.';
   let title = saved?.name ?? 'Camera';
   let sections: SettingsPageProps['sections'] = [];
@@ -348,7 +361,6 @@ export default function DeviceScreen() {
                   subtitle:
                     row.options.find((option) => option.value === row.value)?.label ?? row.value,
                   icon: choiceIcons[row.label] ?? categoryIcons[page] ?? 'gear',
-                  disabled: row.disabled ?? false,
                   onPress: () => open(page, row.label),
                 }
               : row,

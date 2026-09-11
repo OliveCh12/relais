@@ -2,6 +2,14 @@
 
 **Camera and Monitor now share a product flow for photos, native video recording and remote shutter/start/stop.** Continuous native focus, exposure and color remain automatic, with optional native tap metering and exposure compensation. The local writer is independent of the reduced native WebRTC preview. The Mac rendezvous and physical-device validation remain required.
 
+## Remote settings responsiveness
+
+- Settings selections now update optimistically while the camera remains authoritative for capture, readiness and gallery completion. A bounded queue serializes native changes, coalesces repeated values and revalidates against the latest revision/capabilities. Native errors and disconnects clear pending edits; old replies cannot affect a replacement connection.
+- Device submenus stay navigable during changes. Background settings pages freeze their rendering while Camera/Monitor and transport remain active. Duplicate remote snapshots, redundant format-cache writes and settings-subpage presence scans are reduced.
+- Deployment investigation found that the Pixel still remembered the old Metro URL on port 8087. This explains why installing the previous Debug APK did not reliably load this UI branch. Release builds now embed the current JavaScript for owner testing without Metro.
+- Strict TypeScript, zero-warning ESLint, formatting and architecture checks passed. The full 63-test suite passed, plus the added cache-write regression. A burst test reduces 21 setting edits to three dispatched commands; this is command-count evidence, not physical network-latency measurement.
+- [Implementation, scope, primary references and test procedure](docs/remote-settings-performance.md).
+
 ## Home, app Settings and device stack pages
 
 - Follow-up: the device overview now has one Camera Settings entry. Capture, Video, Photo, Brightness and Preset live on its child pages. Navigation rows consistently use colored SF Symbol badges on iOS and tonal Material Symbol circles on Android, including Home, My cameras, Settings and pairing pages. TypeScript, zero-warning ESLint, architecture boundaries and all-platform production exports passed; incremental iOS and Android builds passed.

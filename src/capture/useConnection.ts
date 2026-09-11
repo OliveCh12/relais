@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { AppState } from 'react-native';
 import { appPreferences, detectedServer, usePreferences } from '@/preferences/usePreferences';
 import { useFocusEffect, useIsFocused } from 'expo-router';
@@ -9,6 +16,7 @@ import type { SavedDevice } from '../connections/model';
 import type { LinkSample } from '../connections/quality';
 import { type PairingDescriptor } from '../signaling/protocol';
 import { CommandHost } from './CommandHost';
+import { RemoteSettingsQueue, previewSettings, settingsChange } from './RemoteSettingsQueue';
 import { parseCaptureState, parseMessage, type CaptureAction, type CaptureState } from './protocol';
 
 export function useConnection(
@@ -34,7 +42,11 @@ export function useConnection(
   const [quality, setQuality] = useState<LinkSample | null>(null);
   const [remote, updateRemote] = useState<CaptureState | null>(null);
   const remoteRef = useRef<CaptureState | null>(null);
+  const remoteSignature = useRef('null');
   const setRemote = useCallback((state: CaptureState | null) => {
+    const signature = JSON.stringify(state);
+    if (signature === remoteSignature.current) return;
+    remoteSignature.current = signature;
     remoteRef.current = state;
     updateRemote(state);
   }, []);
@@ -57,6 +69,67 @@ export function useConnection(
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
 
+  const sendCommand = useCallback(
+    (action: CaptureAction) =>
+      new Promise<CaptureState | null>((resolve, reject) => {
+        if (!trusted.current || !session.current) {
+          reject(new Error('Connect to your camera first.'));
+          return;
+        }
+        if (pending.current?.action === 'photo' && action === 'cancel-timer') {
+          clearTimeout(pending.current.timer);
+          pending.current.resolve(null);
+          pending.current = null;
+        }
+        if (pending.current) {
+          reject(new Error('Wait for the camera to respond.'));
+          return;
+        }
+        const number = ++sequence.current;
+        const id = `capture-${number}`;
+        const timer = setTimeout(() => {
+          pending.current = null;
+          setSending(false);
+          reject(
+            new Error('The camera has not confirmed this action. Check it before trying again.'),
+          );
+        }, 95_000);
+        pending.current = { id, action, resolve, reject, timer };
+        setSending(true);
+        try {
+          session.current.send(
+            JSON.stringify({ type: 'capture-command', id, sequence: number, action }),
+          );
+        } catch (error) {
+          clearTimeout(timer);
+          pending.current = null;
+          setSending(false);
+          reject(error);
+        }
+      }),
+    [],
+  );
+
+  const [settingsQueue] = useState(() => new RemoteSettingsQueue());
+  useLayoutEffect(() => {
+    settingsQueue.configure(() => remoteRef.current, sendCommand);
+  }, [settingsQueue, sendCommand]);
+  const settingsSnapshot = useSyncExternalStore(settingsQueue.subscribe, settingsQueue.getSnapshot);
+  const command = useCallback(
+    (action: CaptureAction) => {
+      const change = settingsChange(action);
+      if (change) {
+        if (pending.current && !settingsQueue.getSnapshot().pending)
+          return Promise.reject(new Error('Wait for the capture to finish.'));
+        return settingsQueue.enqueue(change);
+      }
+      if (settingsQueue.getSnapshot().pending)
+        return Promise.reject(new Error('Wait for camera settings to finish applying.'));
+      return sendCommand(action);
+    },
+    [sendCommand, settingsQueue],
+  );
+
   const publish = useCallback(() => {
     if (!cameraRef.current || !trusted.current || !session.current) return;
     const text = JSON.stringify({ type: 'capture-state', state: cameraRef.current.state });
@@ -73,6 +146,7 @@ export function useConnection(
 
   const stop = useCallback(() => {
     generation.current += 1;
+    settingsQueue.reset();
     if (retryTimer.current) clearTimeout(retryTimer.current);
     retryTimer.current = null;
     session.current?.dispose();
@@ -95,7 +169,7 @@ export function useConnection(
     setQuality(null);
     setSending(false);
     setConnectionError(null);
-  }, [setRemote]);
+  }, [setRemote, settingsQueue]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -177,7 +251,6 @@ export function useConnection(
                   if (reply && isCurrent()) {
                     try {
                       peer.send(JSON.stringify(reply));
-                      publish();
                     } catch {}
                   }
                 });
@@ -193,7 +266,11 @@ export function useConnection(
                 if (message.ok === true) {
                   const state = parseCaptureState(message.state);
                   if (state) setRemote(state);
-                  request.resolve(state ?? remoteRef.current);
+                  if (!state && settingsChange(request.action))
+                    request.reject(
+                      new Error('The camera has not confirmed its settings. Please reconnect.'),
+                    );
+                  else request.resolve(state ?? remoteRef.current);
                 } else
                   request.reject(
                     new Error(
@@ -249,47 +326,6 @@ export function useConnection(
     start,
   ]);
 
-  const command = useCallback(
-    (action: CaptureAction) =>
-      new Promise<CaptureState | null>((resolve, reject) => {
-        if (!trusted.current || !session.current) {
-          reject(new Error('Connect to your camera first.'));
-          return;
-        }
-        if (pending.current?.action === 'photo' && action === 'cancel-timer') {
-          clearTimeout(pending.current.timer);
-          pending.current.resolve(null);
-          pending.current = null;
-        }
-        if (pending.current) {
-          reject(new Error('Wait for the camera to respond.'));
-          return;
-        }
-        const number = ++sequence.current;
-        const id = `capture-${number}`;
-        const timer = setTimeout(() => {
-          pending.current = null;
-          setSending(false);
-          reject(
-            new Error('The camera has not confirmed this action. Check it before trying again.'),
-          );
-        }, 95_000);
-        pending.current = { id, action, resolve, reject, timer };
-        setSending(true);
-        try {
-          session.current.send(
-            JSON.stringify({ type: 'capture-command', id, sequence: number, action }),
-          );
-        } catch (error) {
-          clearTimeout(timer);
-          pending.current = null;
-          setSending(false);
-          reject(error);
-        }
-      }),
-    [],
-  );
-
   const getEpoch = useCallback(() => generation.current, []);
   const getRemote = useCallback(() => remoteRef.current, []);
   const diagnostics = useCallback(() => session.current?.diagnostics(), []);
@@ -314,7 +350,9 @@ export function useConnection(
     remote,
     getRemote,
     getEpoch,
-    sending,
+    sending: sending || settingsSnapshot.pending,
+    settingsPending: settingsSnapshot.pending,
+    settingsPreview: previewSettings(remote, settingsSnapshot),
     focused: focused && foreground,
     start,
     stop,
