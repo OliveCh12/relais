@@ -1,9 +1,9 @@
+import { SettingsGroup } from '../SettingsGroup.android';
 import { useState } from 'react';
 import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Card,
   Column,
   Icon,
   DropdownMenu,
@@ -23,6 +23,7 @@ import {
   padding,
   paddingAll,
   size,
+  defaultMinSize,
 } from '@expo/ui/jetpack-compose/modifiers';
 import chevron from '@expo/material-symbols/chevron_right.xml';
 import { availabilityLabels } from '@/connections/model';
@@ -101,43 +102,42 @@ export function MonitorSetup(props: MonitorSetupProps) {
           </Text>
           {props.rows.length === 0 && (
             <Column modifiers={[paddingAll(24)]} verticalArrangement={{ spacedBy: 8 }}>
-              <Text style={{ typography: 'titleMedium' }}>Add your first camera</Text>
+              <Text style={{ typography: 'titleLarge' }}>Add your first camera</Text>
               <Text color={colors.onSurfaceVariant}>Tap + to connect another phone.</Text>
             </Column>
           )}
           {props.rows.length > 0 && (
-            <Card>
-              <Column>
-                {props.rows.map((row) => (
-                  <ListItem
-                    key={row.device.id}
-                    colors={{ containerColor: 'transparent' }}
-                    modifiers={[
-                      clickable(() => {
-                        if (!props.connecting) props.onSelect(row);
-                      }),
-                    ]}
-                  >
-                    <ListItem.LeadingContent>
-                      <SettingsIcon name="device" muted={row.availability !== 'available'} />
-                    </ListItem.LeadingContent>
-                    <ListItem.HeadlineContent>
-                      <Text>{row.device.name}</Text>
-                    </ListItem.HeadlineContent>
-                    <ListItem.SupportingContent>
-                      <Text>{availabilityLabels[row.availability]}</Text>
-                    </ListItem.SupportingContent>
-                    <ListItem.TrailingContent>
-                      <Icon source={chevron} size={20} tint={colors.onSurfaceVariant} />
-                    </ListItem.TrailingContent>
-                  </ListItem>
-                ))}
-              </Column>
-            </Card>
+            <SettingsGroup>
+              {props.rows.map((row) => (
+                <ListItem
+                  key={row.device.id}
+                  colors={{ containerColor: colors.surfaceContainer }}
+                  modifiers={[
+                    defaultMinSize({ minHeight: 80 }),
+                    clickable(() => {
+                      if (!props.connecting) props.onSelect(row);
+                    }),
+                  ]}
+                >
+                  <ListItem.LeadingContent>
+                    <SettingsIcon name="device" muted={row.availability !== 'available'} />
+                  </ListItem.LeadingContent>
+                  <ListItem.HeadlineContent>
+                    <Text style={{ typography: 'titleMedium' }}>{row.device.name}</Text>
+                  </ListItem.HeadlineContent>
+                  <ListItem.SupportingContent>
+                    <Text>{availabilityLabels[row.availability]}</Text>
+                  </ListItem.SupportingContent>
+                  <ListItem.TrailingContent>
+                    <Icon source={chevron} size={20} tint={colors.onSurfaceVariant} />
+                  </ListItem.TrailingContent>
+                </ListItem>
+              ))}
+            </SettingsGroup>
           )}
           <Text
             color={colors.onSurfaceVariant}
-            style={{ typography: 'bodySmall' }}
+            style={{ typography: 'bodyMedium' }}
             modifiers={[padding(24, 16, 24, 16)]}
           >
             {props.status || 'Open Camera on your other phone to make it available.'}

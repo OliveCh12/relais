@@ -14,8 +14,11 @@ import {
 import {
   accessibilityHidden,
   buttonStyle,
+  contentShape,
+  shapes,
   disabled,
   font,
+  fixedSize,
   foregroundStyle,
   frame,
   listStyle,
@@ -94,10 +97,20 @@ export function MonitorSetup(props: MonitorSetupProps) {
               >
                 <HStack
                   spacing={12}
-                  modifiers={[frame({ maxWidth: Infinity, minHeight: 56, alignment: 'leading' })]}
+                  modifiers={[
+                    frame({ maxWidth: Infinity, minHeight: 56, alignment: 'leading' }),
+                    contentShape(shapes.rectangle()),
+                  ]}
                 >
                   <SettingsIcon name="device" muted={row.availability !== 'available'} />
-                  <VStack alignment="leading" spacing={3}>
+                  <VStack
+                    alignment="leading"
+                    spacing={3}
+                    modifiers={[
+                      frame({ maxWidth: Infinity, alignment: 'leading' }),
+                      fixedSize({ horizontal: false, vertical: true }),
+                    ]}
+                  >
                     <Text modifiers={[font({ textStyle: 'body' })]}>{row.device.name}</Text>
                     <Text
                       modifiers={[

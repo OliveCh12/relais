@@ -16,7 +16,7 @@ import {
   HStack,
   RNHostView,
   Section,
-  Spacer,
+  LabeledContent,
   Text,
   TextField,
   Toggle,
@@ -33,6 +33,9 @@ import {
   onSubmit,
   submitLabel,
   font,
+  fixedSize,
+  contentShape,
+  accessibilityHidden,
   tag,
   pickerStyle,
   disabled,
@@ -134,14 +137,23 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
                 : []),
             ]}
           >
-            <HStack spacing={12} modifiers={[frame({ minHeight: 28 })]}>
+            <HStack
+              spacing={12}
+              modifiers={[
+                frame({ maxWidth: Infinity, minHeight: 44 }),
+                contentShape(shapes.rectangle()),
+              ]}
+            >
               {row.kind === 'navigation' && <SettingsIcon name={row.icon ?? 'gear'} />}
               <VStack
                 alignment="leading"
                 spacing={4}
-                modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+                modifiers={[
+                  frame({ maxWidth: Infinity, alignment: 'leading' }),
+                  fixedSize({ horizontal: false, vertical: true }),
+                ]}
               >
-                <Text>{row.label}</Text>
+                <Text modifiers={[font({ textStyle: 'body' })]}>{row.label}</Text>
                 {row.subtitle && (
                   <Text
                     modifiers={[
@@ -157,7 +169,10 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
                 <Image
                   systemName="chevron.right"
                   size={12}
-                  modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}
+                  modifiers={[
+                    foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                    accessibilityHidden(true),
+                  ]}
                 />
               ) : (
                 row.selected && <Image systemName="checkmark" size={18} />
@@ -227,14 +242,17 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
             modifiers={[disabled(row.disabled ?? false)]}
           />
         ) : (
-          <HStack key={row.label} spacing={10}>
-            {row.icon && <NativeIcon name={row.icon} size={20} />}
-            <Text>{row.label}</Text>
-            <Spacer />
-            <Text modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}>
-              {row.value}
-            </Text>
-          </HStack>
+          <LabeledContent
+            key={row.label}
+            label={
+              <HStack spacing={10}>
+                {row.icon && <NativeIcon name={row.icon} size={20} />}
+                <Text>{row.label}</Text>
+              </HStack>
+            }
+          >
+            <Text modifiers={[fixedSize({ horizontal: false, vertical: true })]}>{row.value}</Text>
+          </LabeledContent>
         ),
       )}
     </>
@@ -268,7 +286,14 @@ export function SettingsPage({ sections, content, header }: SettingsPageProps) {
                   />
                 )}
               </ZStack>
-              <VStack alignment="leading" spacing={4}>
+              <VStack
+                alignment="leading"
+                spacing={4}
+                modifiers={[
+                  frame({ maxWidth: Infinity, alignment: 'leading' }),
+                  fixedSize({ horizontal: false, vertical: true }),
+                ]}
+              >
                 <Text modifiers={[font({ textStyle: 'headline' })]}>{header.title}</Text>
                 <Text
                   modifiers={[

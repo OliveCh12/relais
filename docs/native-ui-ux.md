@@ -2,14 +2,16 @@
 
 Research began September 9, 2026. The requirement is to use real Apple/Google controls and camera-app conventions. SwiftUI/Compose controls, native icons, a fixed viewfinder and shared settings logic were introduced that day. This document separates the current journey from the historical audit. Exact build/device evidence is in STATUS.md.
 
+The [September 11 platform UI decision](research/native-ui-architecture-2026-09-11.md) is the current architecture reference for typography, native control bindings and navigation limits.
+
 For new component work, consult the [native components and interaction-performance reference](research/native-components-and-performance.md), checked against official documentation and the installed packages on September 10. It distinguishes current bindings from newer SDK APIs, documents native state and sheet lifecycles, and maps each Relais interaction to the appropriate platform control. The [code audit](research/native-code-audit-2026-09-10.md) contains the ordered implementation backlog.
 
-## Current journey — September 10
+## Current journey — September 11
 
 | Surface              | iPhone                                                                    | Android                                                                         |
 | -------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Home                 | SwiftUI Form/Section                                                      | Material ListItem actions                                                       |
-| My cameras           | Native inset-grouped list, device icon and availability                   | Material Card/ListItem groups, circular device icons and availability           |
+| My cameras           | Native inset-grouped list, device icon and availability                   | Material Surface/ListItem groups, circular device icons and availability        |
 | Device details       | Native auto-saving TextField, progress/check and prominent Connect Button | Native auto-saving OutlinedTextField, progress/check and app-bar Connect Button |
 | Navigation           | Native stack pages with Back for device and pairing                       | Native stack pages with Back for device and pairing                             |
 | Camera modes         | Segmented Picker: Photo, Video, supported Cinematic; swipe between modes  | Material segmented buttons: Photo/Video; swipe between modes                    |
@@ -24,7 +26,7 @@ Connection and device pages follow the system theme; capture stays dark. Native 
 
 The current [controls implementation and API limits](research/native-camera-controls.md) cover auto-saving names, native buttons, gallery access, exposure units, timers, remote control and native settings presentation. Public components take priority over recreating private camera-app widgets. Physical captures, visual acceptance, screen-reader checks and display-frame-rate measurement are owned by the user for this pass; build evidence is recorded in STATUS.md.
 
-Device pages now combine information and presets with native expandable settings groups; there is no separate Info page. Connect stays in the app bar. Touch-hold/vertical-drag provides native focus and exposure, with plain camera buttons. [Implementation and sources](research/relay-viewfinder.md), [acceptance steps](relay-testing.md).
+Device pages now link to Connection and Camera Settings stack pages; there is no separate Info page. Camera settings categories and their choices open child pages. Connect stays in the app bar. Touch-hold/vertical-drag provides native focus and exposure, with plain camera buttons. [Implementation and sources](research/relay-viewfinder.md), [acceptance steps](relay-testing.md).
 
 ## Architecture and platform choices
 
@@ -63,7 +65,7 @@ Apple's [AVCam sample](https://developer.apple.com/documentation/avfoundation/av
 | Ordinary actions | SwiftUI Button, system role/style, SF Symbols                             | Compose Button, FilledTonalButton, IconButton, Material Symbols                                     |
 | Settings         | Form/Section, menu or segmented Picker, Toggle, Slider                    | ListItem, segmented buttons for short choices, menus/radio lists for longer choices, Switch, Slider |
 | Quality sheet    | Native sheet, medium/large detents, drag indicator and dismissal          | ModalBottomSheet, drag indicator, expansion, gesture and Back dismissal                             |
-| Navigation       | Existing native stack, back gestures and system presentation              | Existing native stack, system Back; predictive Back needs validation                                |
+| Navigation       | Existing native stack, back gestures and system presentation              | Existing native stack, modern system Back; full predictive in-app animation remains deferred        |
 | Viewfinder       | Native video surface with SwiftUI controls                                | Native video surface with Compose controls                                                          |
 | Record           | Native action with camera-specific circular content and recognizable Stop | Native action with camera-specific circular content and platform feedback                           |
 | Appearance       | Semantic typography/colors, system light/dark outside capture             | Material typography/semantic and dynamic colors outside capture                                     |
@@ -112,7 +114,7 @@ Measure optimized builds on real phones: Home, sheets, rotation and Back, then t
 
 ## Simplification history
 
-The first native migration still had oversized promotional text, large capsules and repeated demo explanations. A second pass used compact role rows, modest system titles, concise descriptions and native About for version information. Camera/Monitor now have distinct entry points; QR/manual setup in the development connection flow lives in native sheets rather than permanent viewfinder cards. The release Monitor entry still reaches the explicit demo scanner/fixture journey until product transport is implemented; see the code audit.
+The first native migration still had oversized promotional text, large capsules and repeated demo explanations. A second pass used compact role rows, modest system titles, concise descriptions and native About for version information. Camera/Monitor now have distinct entry points; QR/manual setup in the development connection flow lives in native sheets rather than permanent viewfinder cards. The release Monitor now uses the paired product transport; the scanner/fixture journey remains isolated in the development spike.
 
 Native light/dark splash assets and an Android adaptive icon add no delay. Dev Client loading remains separate from production launch. Remembered-device pairing is now implemented, while autonomous discovery and a phone-hosted server remain unfinished. Never populate fake nearby devices or claim a connection without an actual service.
 
@@ -124,7 +126,7 @@ A saved camera has one header availability indicator and Connect in the app bar.
 
 Text edits commit on blur, keyboard Done or leaving their stack page; native text input remains independent of React rendering. A small progress indicator and checkmark reflect durable writes. Duplicate blur/Done events are coalesced and failed writes remain retryable. Toggles and selections commit immediately. App quality, network address and preview framing are saved in SecureStore. Per-camera names, optional network overrides and pending presets use the existing device registry and serialized writes. Empty network overrides restore automatic/default addressing. Pairing credentials are never presented as editable text.
 
-Best available is the default video preference: choose an actual advertised profile nearest to 4K60, preserving the current HDR choice when that combination is available. Balanced targets 1080p30; Keep camera settings sends no automatic profile command. The preference applies once per connected camera/mode/lens/preference combination, only when the camera can accept settings. It never starts recording or changes photo resolution. An explicit profile in a device preset takes priority. Settings are acknowledged by the camera before the pending preset is cleared. Live manual adjustments are not continuously overwritten. The reduced WebRTC preview remains independent of original capture quality.
+Best available is the default video preference: choose the highest camera-advertised resolution and then cadence, preserving the current HDR choice when that combination is available. Balanced targets 1080p30; Keep camera settings sends no automatic profile command. The preference applies once per connected camera/mode/lens/preference combination, only when the camera can accept settings. It never starts recording or changes photo resolution. An explicit profile in a device preset takes priority. Settings are acknowledged by the camera before the pending preset is cleared. Live manual adjustments are not continuously overwritten. The reduced WebRTC preview remains independent of original capture quality.
 
 For acceptance on either platform: open Settings from Home; change quality, return and reopen; edit the network address and finish with Done or Back. In My cameras, open a saved device, rename it in Connection, prepare a preset while offline, then use Connect from the device app bar. Verify the effective camera format and reverse the Camera/Monitor roles. Record and verify gallery originals on the capturing phone. Physical capture, accessibility and visual acceptance remain owner-run; unit checks and native builds do not establish hardware results.
 

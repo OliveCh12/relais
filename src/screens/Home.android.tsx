@@ -1,3 +1,4 @@
+import { SettingsGroup } from '@/components/SettingsGroup.android';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import {
@@ -6,7 +7,6 @@ import {
   Host,
   Icon,
   Text,
-  Card,
   IconButton,
   useMaterialColors,
 } from '@expo/ui/jetpack-compose';
@@ -16,6 +16,7 @@ import {
   clickable,
   testID,
   verticalScroll,
+  defaultMinSize,
 } from '@expo/ui/jetpack-compose/modifiers';
 import gear from '@expo/material-symbols/settings.xml';
 import chevron from '@expo/material-symbols/chevron_right.xml';
@@ -45,34 +46,36 @@ export default function HomeScreen() {
       />
       <Host style={{ flex: 1 }}>
         <Column
-          modifiers={[fillMaxSize(), verticalScroll(), padding(24, 28, 24, 24)]}
+          modifiers={[fillMaxSize(), verticalScroll(), padding(16, 20, 16, 24)]}
           verticalArrangement={{ spacedBy: 24 }}
         >
-          <Text style={{ typography: 'titleMedium' }}>Use this phone as</Text>
-          <Card>
-            <Column>
-              {roles.map((role) => (
-                <ListItem
-                  key={role.id}
-                  colors={{ containerColor: 'transparent' }}
-                  modifiers={[clickable(() => chooseRole(role.id)), testID(`choose-${role.id}`)]}
-                >
-                  <ListItem.LeadingContent>
-                    <SettingsIcon name={role.id} />
-                  </ListItem.LeadingContent>
-                  <ListItem.HeadlineContent>
-                    <Text>{role.title}</Text>
-                  </ListItem.HeadlineContent>
-                  <ListItem.SupportingContent>
-                    <Text>{role.description}</Text>
-                  </ListItem.SupportingContent>
-                  <ListItem.TrailingContent>
-                    <Icon source={chevron} size={20} tint={colors.onSurfaceVariant} />
-                  </ListItem.TrailingContent>
-                </ListItem>
-              ))}
-            </Column>
-          </Card>
+          <Text style={{ typography: 'headlineSmall' }}>Use this phone as</Text>
+          <SettingsGroup>
+            {roles.map((role) => (
+              <ListItem
+                key={role.id}
+                colors={{ containerColor: colors.surfaceContainer }}
+                modifiers={[
+                  defaultMinSize({ minHeight: 96 }),
+                  clickable(() => chooseRole(role.id)),
+                  testID(`choose-${role.id}`),
+                ]}
+              >
+                <ListItem.LeadingContent>
+                  <SettingsIcon name={role.id} />
+                </ListItem.LeadingContent>
+                <ListItem.HeadlineContent>
+                  <Text style={{ typography: 'titleLarge' }}>{role.title}</Text>
+                </ListItem.HeadlineContent>
+                <ListItem.SupportingContent>
+                  <Text>{role.description}</Text>
+                </ListItem.SupportingContent>
+                <ListItem.TrailingContent>
+                  <Icon source={chevron} size={20} tint={colors.onSurfaceVariant} />
+                </ListItem.TrailingContent>
+              </ListItem>
+            ))}
+          </SettingsGroup>
         </Column>
       </Host>
     </SafeAreaView>

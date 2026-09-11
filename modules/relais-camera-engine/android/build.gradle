@@ -16,8 +16,8 @@ dependencies {
 }
 
 android {
-  ndkVersion rootProject.ext.ndkVersion
-  namespace 'expo.modules.relaiscameraengine'
+  ndkVersion = rootProject.ext.ndkVersion
+  namespace = 'expo.modules.relaiscameraengine'
   defaultConfig {
     ndk { abiFilters.addAll((findProperty('reactNativeArchitectures') ?: 'arm64-v8a,x86_64').split(',')) }
     versionCode 1
@@ -26,7 +26,7 @@ android {
       cmake { arguments '-DANDROID_STL=c++_shared', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' }
     }
   }
-  buildFeatures { prefab true }
+  buildFeatures { prefab = true }
   externalNativeBuild { cmake { path 'CMakeLists.txt' } }
   packagingOptions {
     jniLibs.excludes += ['**/libc++_shared.so', '**/libNitroModules.so', '**/libVisionCamera.so', '**/libfbjni.so', '**/libjsi.so', '**/libreactnative.so']

@@ -6,7 +6,7 @@ export function DeviceConnect({ connected, disabled, onConnect }: DeviceConnectP
     <Stack.Screen
       options={{
         headerRight: () => (
-          <Host style={{ width: 110, height: 48 }}>
+          <Host matchContents style={{ minHeight: 48 }}>
             <Button onClick={onConnect} enabled={!disabled}>
               <Text>{connected ? 'Live' : 'Connect'}</Text>
             </Button>

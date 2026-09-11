@@ -2,7 +2,7 @@ import { CommandSupersededError } from '@/capture/RemoteCommandClient';
 import { ViewfinderGesture } from '@/components/ViewfinderGesture';
 import { videoPoint, type Size } from '@/capture/viewfinder';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -253,15 +253,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#00000080',
   },
-  title: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  title: { color: '#FFF', fontSize: Platform.OS === 'android' ? 16 : 15, fontWeight: '600' },
   device: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
-  caption: { color: '#DDD', fontSize: 12, textAlign: 'center', flexShrink: 1 },
-  recording: { color: '#FF6961', fontSize: 12, fontWeight: '600', marginTop: 3 },
+  caption: {
+    color: '#DDD',
+    fontSize: Platform.OS === 'android' ? 14 : 13,
+    textAlign: 'center',
+    flexShrink: 1,
+  },
+  recording: { color: '#FF6961', fontSize: 14, fontWeight: '600', marginTop: 3 },
   bottom: { position: 'absolute', gap: 12 },
   shutter: { alignItems: 'center' },
   message: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: 14,
     textAlign: 'center',
     backgroundColor: '#00000080',
     padding: 8,

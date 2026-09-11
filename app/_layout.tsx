@@ -1,3 +1,4 @@
+import { useStackOptions } from '@/navigation/useStackOptions';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
@@ -16,6 +17,7 @@ export default function RootLayout() {
     }
   }, []);
   const theme = useAppTheme();
+  const screenOptions = useStackOptions();
   const base = theme.dark ? DarkTheme : DefaultTheme;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -33,20 +35,11 @@ export default function RootLayout() {
         }}
       >
         <StatusBar style="auto" />
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: theme.background },
-            headerTintColor: Platform.OS === 'ios' ? theme.accent : theme.text,
-            headerTitleStyle: { color: theme.text },
-            contentStyle: { backgroundColor: theme.background },
-            headerShadowVisible: false,
-            headerBackTitle: 'Back',
-          }}
-        >
+        <Stack screenOptions={screenOptions}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="pairing" options={{ title: 'Pair phones' }} />
-          <Stack.Screen name="camera" options={{ headerShown: false }} />
-          <Stack.Screen name="monitor" options={{ headerShown: false }} />
+          <Stack.Screen name="camera" options={{ headerShown: false, freezeOnBlur: false }} />
+          <Stack.Screen name="monitor" options={{ headerShown: false, freezeOnBlur: false }} />
           <Stack.Screen name="about" options={{ title: 'About Relais' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings' }} />
           <Stack.Screen name="dev/webrtc" options={{ title: 'Live preview', headerShown: false }} />

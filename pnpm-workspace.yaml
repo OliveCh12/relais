@@ -9,4 +9,5 @@ allowBuilds:
   unrs-resolver: true
 
 patchedDependencies:
+  '@expo/ui@57.0.17': patches/@expo__ui@57.0.17.patch
   react-native-webrtc@124.0.8: patches/react-native-webrtc@124.0.8.patch

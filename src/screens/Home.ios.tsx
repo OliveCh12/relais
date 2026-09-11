@@ -5,6 +5,8 @@ import {
   accessibilityHidden,
   accessibilityIdentifier,
   buttonStyle,
+  contentShape,
+  shapes,
   fixedSize,
   font,
   foregroundStyle,
@@ -45,7 +47,14 @@ export default function HomeScreen() {
                 onPress={() => chooseRole(role.id)}
                 modifiers={[buttonStyle('plain'), accessibilityIdentifier(`choose-${role.id}`)]}
               >
-                <HStack spacing={16} modifiers={[padding({ vertical: 4 })]}>
+                <HStack
+                  spacing={16}
+                  modifiers={[
+                    padding({ vertical: 4 }),
+                    frame({ minHeight: 56 }),
+                    contentShape(shapes.rectangle()),
+                  ]}
+                >
                   <SettingsIcon name={role.id} />
                   <VStack
                     alignment="leading"

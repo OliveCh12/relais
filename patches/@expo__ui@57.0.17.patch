@@ -1,0 +1,64 @@
+diff --git a/android/src/main/java/expo/modules/ui/SwitchView.kt b/android/src/main/java/expo/modules/ui/SwitchView.kt
+index 13da542ebd551af6f8916af5382b2f204cb73715..79ddd36f20ade253d957a8d7df6b4bf1be718d54 100644
+--- a/android/src/main/java/expo/modules/ui/SwitchView.kt
++++ b/android/src/main/java/expo/modules/ui/SwitchView.kt
+@@ -40,6 +40,7 @@ data class SwitchColors(
+ @OptimizedComposeProps
+ data class SwitchProps(
+   val value: Boolean = false,
++  val clickable: Boolean = true,
+   val enabled: Boolean = true,
+   val colors: SwitchColors = SwitchColors(),
+   val modifiers: ModifierList = emptyList()
+@@ -54,7 +55,7 @@ fun FunctionalComposableScope.SwitchContent(
+ 
+   Switch(
+     checked = props.value,
+-    onCheckedChange = onCheckedChange,
++    onCheckedChange = if (props.clickable) onCheckedChange else null,
+     modifier = ModifierRegistry.applyModifiers(props.modifiers, appContext, composableScope, globalEventDispatcher),
+     enabled = props.enabled,
+     thumbContent = thumbContentSlotView?.let {
+diff --git a/android/src/main/java/expo/modules/ui/TextView.kt b/android/src/main/java/expo/modules/ui/TextView.kt
+index 66905c6331389a28fd1c9106a0adc116321182f2..e195a013712c1594d0b19dbcc859641ce29f811a 100644
+--- a/android/src/main/java/expo/modules/ui/TextView.kt
++++ b/android/src/main/java/expo/modules/ui/TextView.kt
+@@ -3,6 +3,7 @@ package expo.modules.ui
+ import android.content.Context
+ import android.graphics.Color
+ import android.graphics.Typeface
++import androidx.compose.material3.LocalTextStyle
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.Text
+ import androidx.compose.runtime.Composable
+@@ -288,8 +289,8 @@ private fun AnnotatedString.Builder.appendSpans(spans: List<TextSpanRecord>, con
+ 
+ @Composable
+ fun FunctionalComposableScope.TextContent(props: TextProps) {
+-  // Start with typography style if provided, otherwise use default
+-  val baseStyle = props.typography?.toTextStyle() ?: TextStyle.Default
++  // Inherit typography from the native parent slot unless explicitly overridden.
++  val baseStyle = props.typography?.toTextStyle() ?: LocalTextStyle.current
+ 
+   // Merge base style with custom properties
+   val mergedStyle = baseStyle.merge(
+diff --git a/src/jetpack-compose/Switch/index.tsx b/src/jetpack-compose/Switch/index.tsx
+index b6268feaa31dbf2d2f8ec5930684d8d9f17023bf..ae3ad855c8665e2ad2cafe40898185a7a3f18ba2 100644
+--- a/src/jetpack-compose/Switch/index.tsx
++++ b/src/jetpack-compose/Switch/index.tsx
+@@ -57,6 +57,7 @@ export interface SwitchProps {
+ }
+ 
+ type NativeSwitchProps = Omit<SwitchProps, 'onCheckedChange' | 'children'> & {
++  clickable: boolean;
+   children?: React.ReactNode;
+   onCheckedChange: (event: NativeSyntheticEvent<{ value: boolean }>) => void;
+ };
+@@ -94,6 +95,7 @@ function transformSwitchProps(props: SwitchProps): Omit<NativeSwitchProps, 'chil
+     modifiers,
+     ...(modifiers ? createViewModifierEventListener(modifiers) : undefined),
+     ...restProps,
++    clickable: onCheckedChange != null,
+     onCheckedChange: ({ nativeEvent: { value } }) => {
+       onCheckedChange?.(value);
+     },

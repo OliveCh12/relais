@@ -32,6 +32,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'app.relais.mobile',
+    predictiveBackGestureEnabled: true,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#007AFF',

@@ -1,3 +1,4 @@
+import { SettingsGroup } from './SettingsGroup.android';
 import chevronRight from '@expo/material-symbols/chevron_right.xml';
 import expandMore from '@expo/material-symbols/keyboard_arrow_down.xml';
 import { Keyboard } from 'react-native';
@@ -35,6 +36,8 @@ import {
   fillMaxWidth,
   paddingAll,
   verticalScroll,
+  toggleable,
+  selectable,
 } from '@expo/ui/jetpack-compose/modifiers';
 import { useNameWriter } from './useNameWriter';
 import { SettingsIcon } from './icons/SettingsIcon.android';
@@ -115,7 +118,7 @@ function Group({ row }: { row: Extract<SettingsRow, { kind: 'group' }> }) {
   return (
     <Column>
       <ListItem
-        colors={{ containerColor: 'transparent' }}
+        colors={{ containerColor: colors.surfaceContainer }}
         modifiers={[clickable(() => setExpanded((value) => !value))]}
       >
         <ListItem.LeadingContent>
@@ -137,10 +140,11 @@ function Group({ row }: { row: Extract<SettingsRow, { kind: 'group' }> }) {
   );
 }
 function Choice({ row }: { row: Extract<SettingsRow, { kind: 'choice' }> }) {
+  const colors = useMaterialColors();
   return (
     <DropdownMenu>
       <DropdownMenu.Trigger>
-        <ListItem colors={{ containerColor: 'transparent' }}>
+        <ListItem colors={{ containerColor: colors.surfaceContainer }}>
           <ListItem.HeadlineContent>
             <Text>{row.label}</Text>
           </ListItem.HeadlineContent>
@@ -215,8 +219,19 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
         ) : (
           <ListItem
             key={row.label}
-            colors={{ containerColor: 'transparent' }}
-            modifiers={'onPress' in row && !row.disabled ? [clickable(row.onPress)] : []}
+            colors={{ containerColor: colors.surfaceContainer }}
+            modifiers={[
+              defaultMinSize({ minHeight: row.kind === 'navigation' ? 80 : 64 }),
+              ...('disabled' in row && row.disabled
+                ? []
+                : row.kind === 'toggle'
+                  ? [toggleable(row.value, () => row.onChange(!row.value), { role: 'switch' })]
+                  : row.kind === 'option'
+                    ? [selectable(row.selected, row.onPress, 'radioButton')]
+                    : 'onPress' in row
+                      ? [clickable(row.onPress)]
+                      : []),
+            ]}
           >
             {row.kind === 'navigation' ? (
               <ListItem.LeadingContent>
@@ -232,6 +247,7 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
             )}
             <ListItem.HeadlineContent>
               <Text
+                style={{ typography: row.kind === 'navigation' ? 'titleLarge' : 'bodyLarge' }}
                 color={
                   row.kind === 'action' && row.destructive
                     ? colors.error
@@ -255,11 +271,7 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
             )}
             {row.kind === 'option' && (
               <ListItem.TrailingContent>
-                <RadioButton
-                  selected={row.selected}
-                  onClick={row.onPress}
-                  enabled={!row.disabled}
-                />
+                <RadioButton selected={row.selected} enabled={!row.disabled} />
               </ListItem.TrailingContent>
             )}
             {row.kind === 'value' && (
@@ -269,7 +281,7 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
             )}
             {row.kind === 'toggle' && (
               <ListItem.TrailingContent>
-                <Switch value={row.value} onCheckedChange={row.onChange} enabled={!row.disabled} />
+                <Switch value={row.value} enabled={!row.disabled} />
               </ListItem.TrailingContent>
             )}
           </ListItem>
@@ -314,8 +326,8 @@ export function SettingsContent({ sections, content, header }: SettingsPageProps
               )}
             </Box>
             <Column modifiers={[weight(1)]} verticalArrangement={{ spacedBy: 4 }}>
-              <Text style={{ typography: 'titleMedium' }}>{header.title}</Text>
-              <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
+              <Text style={{ typography: 'titleLarge' }}>{header.title}</Text>
+              <Text color={colors.onSurfaceVariant} style={{ typography: 'bodyMedium' }}>
                 {header.subtitle}
               </Text>
             </Column>
@@ -324,18 +336,18 @@ export function SettingsContent({ sections, content, header }: SettingsPageProps
       )}
       {sections.map((section) => (
         <Column key={section.title} verticalArrangement={{ spacedBy: 8 }}>
-          <Text color={colors.primary} style={{ typography: 'labelLarge' }}>
-            {section.title}
-          </Text>
+          {!!section.title && (
+            <Text color={colors.primary} style={{ typography: 'titleSmall' }}>
+              {section.title}
+            </Text>
+          )}
           {section.rows.length > 0 && (
-            <Card>
-              <Column>
-                <SettingsRows rows={section.rows} />
-              </Column>
-            </Card>
+            <SettingsGroup selection={section.rows.some((row) => row.kind === 'option')}>
+              <SettingsRows rows={section.rows} />
+            </SettingsGroup>
           )}
           {section.footer && (
-            <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
+            <Text color={colors.onSurfaceVariant} style={{ typography: 'bodyMedium' }}>
               {section.footer}
             </Text>
           )}
