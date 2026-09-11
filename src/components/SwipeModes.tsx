@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import type { CaptureModesProps } from './CaptureModes.types';
 export function SwipeModes({ children, ...props }: CaptureModesProps & { children: ReactElement }) {
   const swipe = Gesture.Pan()
@@ -14,7 +14,13 @@ export function SwipeModes({ children, ...props }: CaptureModesProps & { childre
       if (next) props.onMode(next);
     });
   return (
-    <GestureDetector gesture={swipe}>
+    <GestureDetector
+      gesture={
+        Platform.OS === 'android'
+          ? Gesture.Simultaneous(swipe, Gesture.Native().shouldActivateOnStart(true))
+          : swipe
+      }
+    >
       <View collapsable={false} style={{ width: '100%' }}>
         {children}
       </View>

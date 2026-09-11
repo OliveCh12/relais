@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Share, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, ScrollView, View } from 'react-native';
 import { Stack, router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,13 +8,22 @@ import { SettingsPage } from '@/components/SettingsPage';
 import type { SettingsPageProps } from '@/components/SettingsPage.types';
 import { PairingCodeImage } from '@/components/connection/PairingCodeImage';
 import { QrScanner } from '@/components/QrScanner';
+import { ActionButton } from '@/components/ActionButton';
+import { AppText } from '@/components/ui';
 import { parsePairingQr } from '@/signaling/protocol';
 import { useAppTheme } from '@/design/useAppTheme';
 
-export type ConnectionPageKind = 'add' | 'connect' | 'server' | 'code' | 'scan';
+export type ConnectionPageKind = 'add' | 'connect' | 'server' | 'code' | 'scan' | 'share';
 export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
   const { connection, connectTo } = useCaptureSession();
   const focused = useIsFocused();
+  const wasConnected = useRef(connection.connected);
+  useEffect(() => {
+    const justConnected = connection.connected && !wasConnected.current;
+    wasConnected.current = connection.connected;
+    if (justConnected && focused && (page === 'connect' || page === 'share'))
+      router.dismissTo('/camera');
+  }, [connection.connected, focused, page]);
   const [error, setError] = useState('');
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -24,19 +33,39 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
     setMetricsEnabled(measure);
     return () => setMetricsEnabled(false);
   }, [measure, setMetricsEnabled]);
-  const showError = (failure: unknown) =>
-    setError(failure instanceof Error ? failure.message : 'Please try again.');
   const readCode = (value: string) => {
     try {
       connectTo(parsePairingQr(value));
+      return true;
     } catch {
       setError('This code is invalid or expired. Show a new code on the camera phone.');
+      return false;
     }
   };
   let title: string = 'Connection';
   let sections: SettingsPageProps['sections'] = [];
   let content: SettingsPageProps['content'];
-  if (page === 'add') {
+  if (page === 'share') {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 20, gap: 20 }}
+      >
+        <Stack.Screen options={{ title: 'Connection code' }} />
+        <AppText>
+          Touch and hold the code to copy it. On your other phone, open Monitor, tap +, then Enter
+          code. Keep Camera open on this phone until your monitor connects.
+        </AppText>
+        <AppText selectable style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+          {connection.qr
+            ? JSON.stringify(connection.qr)
+            : connection.connected
+              ? 'Your monitor is connected.'
+              : 'Preparing a new code… Return to Camera if no code appears.'}
+        </AppText>
+      </ScrollView>
+    );
+  } else if (page === 'add') {
     title = 'Add camera';
     sections = [
       {
@@ -59,28 +88,28 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
       },
     ];
   } else if (page === 'scan') {
-    title = 'Scan code';
-    sections = [
-      {
-        title: 'Camera connection code',
-        footer: error || 'On the other phone, open Camera, then Connect a monitor.',
-        rows: [
-          {
-            kind: 'navigation',
-            label: 'Enter code instead',
-            icon: 'code',
-            onPress: () => router.replace('/monitor/code'),
-          },
-        ],
-      },
-    ];
-    if (focused) content = <QrScanner key={error} onScan={readCode} />;
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background, paddingBottom: insets.bottom }}>
+        <Stack.Screen options={{ title: 'Scan code', freezeOnBlur: false }} />
+        <StatusBar style="auto" />
+        <View style={{ padding: 20, gap: 12 }}>
+          <AppText>On the other phone, open Camera, then Connect a monitor.</AppText>
+          <ActionButton
+            label="Enter code instead"
+            icon="code"
+            secondary
+            onPress={() => router.replace('/monitor/code')}
+          />
+        </View>
+        {focused && <QrScanner fill onScan={readCode} />}
+      </View>
+    );
   } else if (page === 'code') {
     title = 'Enter code';
     sections = [
       {
         title: 'Connection code',
-        footer: 'On the camera phone, choose Share code, then paste it here.',
+        footer: 'On the camera phone, choose View code, copy it, then paste it here.',
         rows: [
           {
             kind: 'field',
@@ -125,12 +154,10 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
           ...(connection.qr && !connection.connected
             ? [
                 {
-                  kind: 'action' as const,
-                  label: 'Share code',
+                  kind: 'navigation' as const,
+                  label: 'View code',
                   icon: 'code' as const,
-                  onPress: () => {
-                    void Share.share({ message: JSON.stringify(connection.qr) }).catch(showError);
-                  },
+                  onPress: () => router.push('/camera/code'),
                 },
               ]
             : []),
@@ -169,8 +196,7 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
     if (connection.qr && !connection.connected)
       content = <PairingCodeImage value={JSON.stringify(connection.qr)} />;
   }
-  if (error && page !== 'scan')
-    sections.push({ title: 'Could not complete this action', footer: error, rows: [] });
+  if (error) sections.push({ title: 'Could not complete this action', footer: error, rows: [] });
   return (
     <View style={{ flex: 1, backgroundColor: theme.background, paddingBottom: insets.bottom }}>
       <Stack.Screen options={{ title }} />

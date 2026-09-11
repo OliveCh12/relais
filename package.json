@@ -7,6 +7,15 @@
   "engines": {
     "node": ">=24.0.0"
   },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-ui"
+        ]
+      }
+    }
+  },
   "scripts": {
     "start": "expo start --dev-client",
     "ios": "bash scripts/start-ios.sh",

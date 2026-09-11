@@ -1,3 +1,4 @@
+import { ComposeTouchTarget } from './ComposeTouchTarget';
 import { Button, FilledTonalButton, Host, Text } from '@expo/ui/jetpack-compose';
 import {
   defaultMinSize,
@@ -18,23 +19,25 @@ export function ActionButton({
 }: ActionButtonProps) {
   const Control = secondary ? FilledTonalButton : Button;
   return (
-    <Host
-      matchContents={{ vertical: true }}
-      style={{ width: '100%' }}
-      {...(dark ? { colorScheme: 'dark' as const } : {})}
-    >
-      <Control
-        onClick={onPress}
-        enabled={!disabled}
-        modifiers={[
-          fillMaxWidth(),
-          defaultMinSize({ minHeight: 52 }),
-          ...(testID ? [testIdentifier(testID)] : []),
-        ]}
+    <ComposeTouchTarget style={{ width: '100%' }}>
+      <Host
+        matchContents={{ vertical: true }}
+        style={{ width: '100%' }}
+        {...(dark ? { colorScheme: 'dark' as const } : {})}
       >
-        {icon && <NativeIcon name={icon} size={20} />}
-        <Text>{icon ? `  ${label}` : label}</Text>
-      </Control>
-    </Host>
+        <Control
+          onClick={onPress}
+          enabled={!disabled}
+          modifiers={[
+            fillMaxWidth(),
+            defaultMinSize({ minHeight: 52 }),
+            ...(testID ? [testIdentifier(testID)] : []),
+          ]}
+        >
+          {icon && <NativeIcon name={icon} size={20} />}
+          <Text>{icon ? `  ${label}` : label}</Text>
+        </Control>
+      </Host>
+    </ComposeTouchTarget>
   );
 }

@@ -102,7 +102,6 @@ export default function CameraScreen() {
       <StatusBar style="light" />
       <ViewfinderGesture
         enabled={engine.ready && (!engine.busy || recording)}
-        nativeZoom
         {...(controls ? { controls } : {})}
         onFocus={(point) => engine.focus(point)}
         onExposure={engine.setExposure}
@@ -285,7 +284,9 @@ export default function CameraScreen() {
             <Text style={styles.hint}>
               {connection.connected
                 ? `Connected to ${connection.device?.name ?? 'Monitor'}`
-                : 'Tap the viewfinder to adjust brightness'}
+                : controls?.canFocus === false
+                  ? 'Automatic focus'
+                  : 'Tap the viewfinder to focus'}
             </Text>
           )}
         </View>

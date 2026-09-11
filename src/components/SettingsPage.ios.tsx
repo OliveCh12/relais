@@ -42,6 +42,7 @@ import {
   foregroundStyle,
   textInputAutocapitalization,
   autocorrectionDisabled,
+  keyboardType,
 } from '@expo/ui/swift-ui/modifiers';
 import { useNameWriter } from './useNameWriter';
 import { sfSymbols } from './icons/types';
@@ -57,7 +58,13 @@ function Field({ row }: { row: Extract<SettingsRow, { kind: 'field' }> }) {
         text={value}
         placeholder={row.label}
         maxLength={row.maxLength}
-        modifiers={[textInputAutocapitalization('never'), autocorrectionDisabled()]}
+        modifiers={[
+          textInputAutocapitalization('never'),
+          autocorrectionDisabled(),
+          keyboardType('ascii-capable'),
+          submitLabel('go'),
+          onSubmit(() => row.onSave(value.get())),
+        ]}
       />
       <Button label={row.saveLabel} onPress={() => row.onSave(value.get())} />
     </>

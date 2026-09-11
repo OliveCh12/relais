@@ -58,6 +58,11 @@ test('exposure and timer capabilities remain bounded and older peers remain comp
   assert.deepEqual(parseCameraSettings({ ...settings, controls })?.controls, controls);
   assert.ok(parseCameraSettings(settings));
   assert.equal(
+    parseCameraSettings({ ...settings, controls: { ...controls, canFocus: false } })?.controls
+      ?.canFocus,
+    false,
+  );
+  assert.equal(
     parseCameraSettings({ ...settings, controls: { ...controls, timerLight: false } })?.controls
       ?.timerLight,
     false,
@@ -71,6 +76,7 @@ test('exposure and timer capabilities remain bounded and older peers remain comp
     { flash: 'true' },
     { hasFlash: 1 },
     { timerLight: 1 },
+    { canFocus: 'false' },
   ])
     assert.equal(parseCameraSettings({ ...settings, controls: { ...controls, ...patch } }), null);
 });

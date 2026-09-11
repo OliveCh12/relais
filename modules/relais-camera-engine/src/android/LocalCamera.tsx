@@ -27,6 +27,7 @@ import { PhotoTimer } from '../../../../src/capture/PhotoTimer';
 import { profileId, type SettingsAction } from '../../../../src/capture/settings';
 import { isLiveSetting } from '../../../../src/capture/settingPolicy';
 import NativeEngine from './CameraModule';
+import { meteringModes } from './metering';
 import type { RecordingProfile } from '../recordingProfiles';
 import { RecordingController } from '../RecordingController';
 import { closestRecordingProfile, recordingResolutionLabel } from '../recordingProfiles';
@@ -134,6 +135,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
   const runningRef = useRef(false);
   const readyRef = useRef(false);
   const device = useCameraDevice(position);
+  const focusModes = meteringModes(device);
   const alternate = useCameraDevice(position === 'back' ? 'front' : 'back');
   const exposureStep = device && exposureInfo?.id === device.id ? exposureInfo.step : 0;
   useEffect(() => {
@@ -434,8 +436,10 @@ export function useLocalCameraEngine(isFocused: boolean) {
       case 'focus': {
         const controller = cameraRef.current?.controller;
         if (!controller) throw new Error('Camera is not ready.');
+        if (!focusModes.length) throw new Error('Touch focus is unavailable on this camera.');
         const point = unrotatePoint(action.value, NativeEngine.getPreviewRotation());
         await controller.focusTo(VisionCamera.createNormalizedMeteringPoint(point.x, point.y), {
+          modes: focusModes,
           adaptiveness: 'continuous',
           responsiveness: modeRef.current === 'photo' ? 'snappy' : 'steady',
         });
@@ -645,6 +649,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
     startedAt: recording.startedAt ?? 0,
     settings: {
       controls: {
+        canFocus: focusModes.length > 0,
         ...(device?.hasTorch ? { timerLight } : {}),
         exposure:
           exposureStep *
@@ -729,7 +734,16 @@ export function useLocalCameraEngine(isFocused: boolean) {
     selectedProfile,
     focus: async (point: Point) => {
       if (!readyRef.current || !cameraRef.current) throw new Error('Camera is not ready.');
-      await cameraRef.current.focusTo(point, {
+      if (!focusModes.length) throw new Error('Touch focus is unavailable on this camera.');
+      const target = cameraRef.current.createMeteringPoint(point.x, point.y);
+      if (
+        ![target.normalizedX, target.normalizedY].every(
+          (value) => Number.isFinite(value) && value >= 0 && value <= 1,
+        )
+      )
+        return;
+      await cameraRef.current.controller?.focusTo(target, {
+        modes: focusModes,
         adaptiveness: 'continuous',
         responsiveness: modeRef.current === 'photo' ? 'snappy' : 'steady',
       });

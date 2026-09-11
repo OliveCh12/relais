@@ -1,4 +1,5 @@
 export interface CameraControls {
+  canFocus?: boolean;
   timerLight?: boolean;
   exposure: number;
   minExposure: number;
@@ -117,6 +118,7 @@ export function parseCameraSettings(value: unknown): CameraSettings | null {
       ![0, 3, 10].includes(controls.timer) ||
       !['auto', 'off', 'on'].includes(controls.flash) ||
       typeof controls.hasFlash !== 'boolean' ||
+      (controls.canFocus !== undefined && typeof controls.canFocus !== 'boolean') ||
       (controls.timerLight !== undefined && typeof controls.timerLight !== 'boolean'))
   )
     return null;
@@ -124,6 +126,7 @@ export function parseCameraSettings(value: unknown): CameraSettings | null {
     ...(controls
       ? {
           controls: {
+            ...(controls.canFocus === undefined ? {} : { canFocus: controls.canFocus }),
             ...(controls.timerLight === undefined ? {} : { timerLight: controls.timerLight }),
             exposure: controls.exposure,
             minExposure: controls.minExposure,

@@ -82,7 +82,7 @@ export function cameraSettingsSections(
       title: 'Capture',
       rows: captureRows,
       footer:
-        'Touch and hold the live image to focus, then slide vertically to adjust brightness. White balance stays automatic.',
+        'Tap the live image to focus. Adjust brightness in camera settings. White balance stays automatic.',
     });
     sections.push(
       ...cameraControlSections(

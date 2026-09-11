@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
@@ -19,7 +19,6 @@ interface Props {
   onFocus: (point: Point, size: Size) => Promise<unknown>;
   onExposure: (value: number) => Promise<unknown>;
   onError: (error: unknown) => void;
-  nativeZoom?: boolean;
   videoSize?: Size;
   fill?: boolean;
 }
@@ -40,7 +39,7 @@ class ViewfinderInteraction {
     this.writer = new ViewfinderWriter((error) => this.props.onError(error));
   }
   focus(point: Point) {
-    if (!this.props.enabled) return;
+    if (!this.props.enabled || this.props.controls?.canFocus === false) return;
     this.writer.focus(() => this.props.onFocus(point, this.size));
   }
   expose(value: number) {
@@ -69,6 +68,8 @@ export function ViewfinderGesture(props: Props) {
   const min = props.controls?.minExposure ?? 0;
   const max = props.controls?.maxExposure ?? 0;
   const currentExposure = props.controls?.exposure ?? 0;
+  const dragExposure = Platform.OS === 'ios';
+  const canFocus = props.controls?.canFocus !== false;
   useEffect(() => {
     interaction.activate();
     return () => interaction.writer.dispose();
@@ -76,7 +77,7 @@ export function ViewfinderGesture(props: Props) {
   const focus = (point: Point) => interaction.focus(point);
   const setExposure = (value: number) => interaction.expose(value);
   const tap = Gesture.Tap()
-    .enabled(props.enabled)
+    .enabled(props.enabled && canFocus)
     .onEnd((event, success) => {
       if (
         !success ||
@@ -97,7 +98,7 @@ export function ViewfinderGesture(props: Props) {
       visible.value = withDelay(4000, withTiming(0));
     });
   const hold = Gesture.Pan()
-    .enabled(props.enabled)
+    .enabled(props.enabled && dragExposure && (canFocus || max > min))
     .maxPointers(1)
     .activateAfterLongPress(180)
     .onStart((event) => {
@@ -131,14 +132,14 @@ export function ViewfinderGesture(props: Props) {
     .onFinalize(() => {
       visible.value = withDelay(4000, withTiming(0));
     });
-  const gesture = Gesture.Exclusive(hold, tap);
+  const gesture = dragExposure ? Gesture.Exclusive(hold, tap) : tap;
   const square = useAnimatedStyle(() => ({
     opacity: visible.value,
     left: x.value - 32,
     top: y.value - 32,
   }));
   const rail = useAnimatedStyle(() => ({
-    opacity: max > min ? visible.value : 0,
+    opacity: dragExposure && max > min ? visible.value : 0,
     left: x.value + 56 < width.value - 16 ? x.value + 48 : x.value - 48,
     top: Math.min(height.value - 68, Math.max(68, y.value)) - 52,
   }));
@@ -146,9 +147,7 @@ export function ViewfinderGesture(props: Props) {
     top: max > min ? 104 * (1 - (exposure.value - min) / (max - min)) - 10 : 42,
   }));
   return (
-    <GestureDetector
-      gesture={props.nativeZoom ? Gesture.Simultaneous(Gesture.Native(), gesture) : gesture}
-    >
+    <GestureDetector gesture={gesture}>
       <View
         collapsable={false}
         style={StyleSheet.absoluteFill}
