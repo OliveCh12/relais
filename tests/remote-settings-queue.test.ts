@@ -74,6 +74,26 @@ function harness() {
     },
   };
 }
+
+test('stabilization separates coalescing batches and replaces the native format catalog', async () => {
+  const h = harness();
+  const first = h.queue.enqueue({ key: 'grid', value: true });
+  const before = h.queue.enqueue({ key: 'zoom', value: 2 });
+  const stable = h.queue.enqueue({ key: 'stabilization', value: false });
+  const after = h.queue.enqueue({ key: 'zoom', value: 3 });
+  assert.deepEqual(previewSettings(h.state(), h.queue.getSnapshot())?.settings?.profiles, []);
+  await h.confirm(0);
+  assert.equal((h.requests[1]!.action as { value: number }).value, 2);
+  await h.confirm(1);
+  assert.equal((h.requests[2]!.action as { key: string }).key, 'stabilization');
+  await h.confirm(2, {
+    ...h.state(),
+    settings: { ...h.state().settings!, stabilization: false, revision: 4 },
+  });
+  assert.equal((h.requests[3]!.action as { value: number }).value, 3);
+  await h.confirm(3);
+  await Promise.all([first, before, stable, after]);
+});
 test('settings display immediately while capture and completion remain authoritative', async () => {
   const h = harness();
   let completed = false;

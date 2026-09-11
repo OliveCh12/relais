@@ -48,6 +48,8 @@ async function visit(directory) {
           errors.push(`${path}: iOS camera import in Android code`);
         if (path.startsWith('src/capture/') && /\/(android|ios)\//.test(name))
           errors.push(`${path}: platform camera import in the shared command protocol`);
+        if (path.startsWith('src/capture/') && /\/(components|design)\//.test(name))
+          errors.push(`${path}: presentation import in the shared command protocol`);
         if (path.startsWith('src/domain/') && /react|expo|camera\/native/.test(name))
           errors.push(`${path}: forbidden domain dependency`);
       }

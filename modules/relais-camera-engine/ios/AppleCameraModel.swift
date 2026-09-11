@@ -1,8 +1,19 @@
 import AVFoundation
 import Combine
 import UIKit
+import Darwin
 
 final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRecordingDelegate {
+  private let hardware: [String: String] = {
+    var system = utsname()
+    let available = uname(&system) == 0
+    let identifier = withUnsafeBytes(of: &system.machine) {
+      String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self)
+    }
+    return ["platform": "ios", "manufacturer": "Apple",
+      "model": available && !identifier.isEmpty ? identifier : UIDevice.current.model,
+      "osVersion": UIDevice.current.systemVersion]
+  }()
   let session = AVCaptureSession()
   private let queue = DispatchQueue(label: "app.relais.capture", qos: .userInitiated)
   private let movie = AVCaptureMovieFileOutput()
@@ -553,7 +564,8 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   var captureState: [String: Any] {
-    ["mode": settings.photo ? "photo" : settings.cinematic ? "cinematic" : "video",
+    ["hardware": hardware,
+     "mode": settings.photo ? "photo" : settings.cinematic ? "cinematic" : "video",
      "modes": cinematicSupported ? ["photo", "video", "cinematic"] : ["photo", "video"],
      "settings": remoteSettings, "phase": phase, "ready": ready && !configuring, "canShare": canShare,
      "canCapture": canUseCamera && ready && !busy && !configuring && phase != "pending",

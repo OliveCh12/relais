@@ -1,5 +1,6 @@
 import { previewPreset, supportsSetting, type PresetSetting } from './presets';
 import type { CaptureAction, CaptureMode, CaptureState } from './protocol';
+import { changesCatalog, isLiveSetting } from './settingPolicy';
 
 type Change = PresetSetting | { key: 'mode'; value: CaptureMode };
 type Waiter = { resolve: (state: CaptureState) => void; reject: (error: Error) => void };
@@ -10,7 +11,7 @@ interface Snapshot {
   changes: readonly Change[];
 }
 const empty: Snapshot = { pending: false, base: null, changes: [] };
-const barrier = (change: Change) => change.key === 'mode' || change.key === 'position';
+const barrier = (change: Change) => change.key === 'mode' || changesCatalog(change.key);
 
 export function settingsChange(action: CaptureAction): Change | null {
   if (typeof action === 'object')
@@ -80,7 +81,7 @@ export class RemoteSettingsQueue {
   }
   enqueue(change: Change): Promise<CaptureState> {
     return new Promise((resolve, reject) => {
-      // Never merge across a mode/lens change: it changes the native capability catalogue.
+      // Never merge across a change that invalidates the native capability catalogue.
       let replacement: Entry | undefined;
       for (let index = this.entries.length - 1; index >= 0; index -= 1) {
         const entry = this.entries[index]!;
@@ -113,7 +114,7 @@ export class RemoteSettingsQueue {
     this.publish(state);
     try {
       const change = entry.change;
-      const framing = ['grid', 'zoom', 'exposure'].includes(change.key);
+      const framing = change.key !== 'mode' && isLiveSetting(change.key);
       if (
         !state?.ready ||
         !state.settings ||

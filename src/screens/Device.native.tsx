@@ -3,7 +3,7 @@ import { Alert, View } from 'react-native';
 import { Stack, router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCaptureSession } from '@/capture/SessionContext';
-import { remoteSettingsSections } from '@/capture/remoteSettingsSections';
+import { cameraSettingsSections } from '@/components/cameraSettingsSections';
 import { previewPreset } from '@/capture/presets';
 import type { CaptureAction } from '@/capture/protocol';
 import { SettingsPage } from '@/components/SettingsPage';
@@ -66,6 +66,7 @@ export default function DeviceScreen() {
     : saved?.camera
       ? previewPreset(saved.camera, saved.preset)
       : null;
+  const hardware = state?.hardware;
   const command = (action: CaptureAction) => {
     if (!saved || applyingPreset) return;
     if (connected) {
@@ -143,7 +144,7 @@ export default function DeviceScreen() {
       (capturePending ||
         ((!state?.ready || !(state.canCapture || state.phase === 'recording')) && !configuring)));
   const categories = state
-    ? remoteSettingsSections(state, command, disabled, framingDisabled).filter(
+    ? cameraSettingsSections(state, command, disabled, framingDisabled).filter(
         (section) => section.id,
       )
     : [];
@@ -215,6 +216,23 @@ export default function DeviceScreen() {
           },
         ],
         footer: 'This name helps you identify the camera on this phone.',
+      },
+      {
+        title: 'Camera phone',
+        rows: hardware
+          ? [
+              { kind: 'value', label: 'Manufacturer', value: hardware.manufacturer },
+              { kind: 'value', label: 'Hardware model', value: hardware.model },
+              {
+                kind: 'value',
+                label: 'Operating system',
+                value: `${hardware.platform === 'ios' ? 'iOS' : 'Android'} ${hardware.osVersion}`,
+              },
+            ]
+          : [],
+        footer: hardware
+          ? 'Reported by the camera phone. Available formats are checked against its active camera, not inferred from its name.'
+          : 'Connect to load this camera phone’s hardware information.',
       },
       {
         title: 'Network',

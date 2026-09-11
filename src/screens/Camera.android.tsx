@@ -41,7 +41,7 @@ export default function CameraScreen() {
   useEffect(() => {
     updateCamera(engine.captureState, engine.perform);
   }, [engine.captureState, engine.perform, updateCamera]);
-  const { grid, setGrid } = engine;
+  const { grid } = engine;
   useEffect(() => {
     if (!__DEV__) return;
     const runtime = globalThis as typeof globalThis & {
@@ -310,28 +310,8 @@ export default function CameraScreen() {
       <CameraOptions
         visible={settings}
         onClose={() => setSettings(false)}
-        {...(controls ? { controls } : {})}
-        onSetting={(setting) =>
-          act(() =>
-            engine.perform({
-              type: 'settings',
-              revision: engine.captureState.settings!.revision,
-              ...setting,
-            }),
-          )
-        }
-        audio={engine.audio}
-        stabilization={engine.captureState.settings?.stabilization ?? false}
-        canStabilize={engine.captureState.settings?.canStabilize ?? false}
-        onAudio={(value) => act(() => engine.setMicrophone(value))}
-        grid={grid}
-        onGrid={setGrid}
-        quality={engine.quality}
-        disabled={engine.busy || !engine.ready}
-        profiles={engine.profiles}
-        selectedProfile={engine.selectedProfile}
-        onProfile={engine.selectProfile}
-        mode={engine.mode}
+        state={engine.captureState}
+        onAction={(action) => act(() => engine.perform(action))}
       />
     </View>
   );

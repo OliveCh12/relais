@@ -149,8 +149,8 @@ export default function MonitorScreen() {
               label="Settings on camera phone"
               onPress={() =>
                 router.push({
-                  pathname: '/monitor/device',
-                  params: { id: connection.device?.id ?? '' },
+                  pathname: '/monitor/device-settings',
+                  params: { id: connection.device?.id ?? '', page: 'settings' },
                 })
               }
             />

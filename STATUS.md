@@ -2,6 +2,15 @@
 
 **Camera and Monitor now share a product flow for photos, native video recording and remote shutter/start/stop.** Continuous native focus, exposure and color remain automatic, with optional native tap metering and exposure compensation. The local writer is independent of the reduced native WebRTC preview. The Mac rendezvous and physical-device validation remain required.
 
+## Product foundation review and settings consistency
+
+- The paired camera state now includes optional native manufacturer/model/OS metadata. Device → Connection displays it and the existing capability cache preserves it across restart. Old peers without this field remain accepted; no serial identifier or model-based resolution table is introduced.
+- Android local Camera Settings and Monitor now share the settings presentation model and validated command path. Redundant local setters were removed. Settings presentation moved out of the shared control layer, with a new architecture check. Monitor's Settings button opens the connected camera's settings directly.
+- A typed setting policy identifies live controls, catalog-changing settings and preset order. Presets now change stabilization before profile, validating against each fresh native acknowledgement. Stabilization invalidates optimistic/cached format choices and separates coalescing batches. Native failures stop dependent preset changes.
+- The existing 65 tests passed before and after the presentation refactor. The expanded 72-test suite, strict TypeScript, zero-warning ESLint, formatting and architecture checks pass. Production exports passed for iOS, Android and web. Android ARM64 Release and signed iOS device Release builds passed, including strict iOS signature verification. Native toolchain/dependency warnings remain unsuppressed.
+- Both Release builds were installed and launch commands succeeded on the paired Pixel 11 Pro and iPhone 17 Pro at 14:10 on September 11, preserving app data. Android APK SHA-256: `a4d6d999458f568c7acc4600168d34f8ce8b03ee4f76bf20fb06e64e4b0d568a`; iOS embedded bundle SHA-256: `4dfa4d0d6f3e8984df908a8fb789b1161eaf89fbd3b70f7ebc08a5cc521630b9`. Native hardware/capture behavior and the relay remain owner-run physical acceptance; no visual or capture QA is claimed.
+- The [product foundation review](docs/product-foundation-review.md) challenges the complete product contract and separates implemented improvements from release gates. Autonomous two-phone rendezvous and priority Stop/cancel handling remain open P0 items. Full native format coverage and four-direction physical certification are not claimed.
+
 ## Platform camera boundaries and maximum available quality
 
 - Camera owners and product bindings are now explicitly split into Android and iOS paths; native preview creation also resolves by platform. The Monitor command/state model and wire protocol remain shared. The historical fixture API no longer declares product methods that exist on only one OS. Architecture checks protect these boundaries.

@@ -74,3 +74,25 @@ test('exposure and timer capabilities remain bounded and older peers remain comp
   ])
     assert.equal(parseCameraSettings({ ...settings, controls: { ...controls, ...patch } }), null);
 });
+
+test('hardware metadata describes the camera without changing its supported formats', () => {
+  for (const hardware of [
+    { platform: 'ios', manufacturer: 'Apple', model: 'iPhone18,1', osVersion: '26.5' },
+    { platform: 'android', manufacturer: 'Google', model: 'Pixel 11 Pro', osVersion: '17' },
+  ]) {
+    const state = parseCaptureState({ ...emptyCaptureState, settings, hardware });
+    assert.deepEqual(state?.hardware, hardware);
+    assert.deepEqual(state?.settings?.profiles, settings.profiles);
+    const parsed = state!;
+    hardware.model = 'Renamed model';
+    assert.notEqual(parsed.hardware?.model, hardware.model);
+  }
+  assert.ok(parseCaptureState({ ...emptyCaptureState, settings }));
+  for (const invalid of [
+    { platform: 'web', manufacturer: 'Apple', model: 'iPhone', osVersion: '26' },
+    { platform: 'ios', manufacturer: 'Apple', model: '', osVersion: '26' },
+    { platform: 'android', manufacturer: 'Google', model: 'x'.repeat(121), osVersion: '17' },
+    { platform: 'ios', manufacturer: 'Apple', model: 'iPhone\nCamera', osVersion: '26' },
+  ])
+    assert.equal(parseCaptureState({ ...emptyCaptureState, settings, hardware: invalid }), null);
+});

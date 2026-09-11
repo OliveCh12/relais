@@ -7,11 +7,12 @@ import {
   recordingResolutionLabel,
 } from '../../modules/relais-camera-engine/src/recordingProfiles';
 
-export function remoteSettingsSections(
+export function cameraSettingsSections(
   remote: CaptureState,
   command: (action: CaptureAction) => void,
   disabled: boolean,
   framingDisabled: boolean,
+  context: 'local' | 'remote' = 'remote',
 ): SettingsPageProps['sections'] {
   const settings = remote.settings;
   const change = (value: CameraSetting) => {
@@ -71,7 +72,7 @@ export function remoteSettingsSections(
       });
     captureRows.push({
       kind: 'toggle',
-      label: 'Grid on camera',
+      label: context === 'local' ? 'Grid' : 'Grid on camera',
       value: settings.grid,
       disabled: framingDisabled,
       onChange: (value) => change({ key: 'grid', value }),
@@ -152,7 +153,7 @@ export function remoteSettingsSections(
           },
         ],
         footer:
-          'Options come from the camera phone. Changing a setting may briefly pause the live view. The shared preview uses a separate, reduced SDR stream.',
+          'Quality applies to the original saved on the camera phone. Stop recording to change video format, audio or stabilization. The monitor preview has its own quality.',
       });
     }
   } else {

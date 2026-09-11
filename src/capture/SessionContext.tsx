@@ -2,7 +2,8 @@ import { appPreferences, usePreferences } from '@/preferences/usePreferences';
 import { preferredProfile } from '@/preferences/quality';
 import { Alert } from 'react-native';
 import { deviceRegistry } from '@/connections/storage';
-import { supportsSetting, type CameraPreset } from './presets';
+import { type CameraPreset } from './presets';
+import { applyCameraPreset } from './applyPreset';
 import {
   createContext,
   useCallback,
@@ -127,39 +128,8 @@ export function SessionProvider({
     };
     appliedQuality.current.add(initialKey);
     void (async () => {
-      let state = getState();
-      if (request?.preset.mode && request.preset.mode !== state.mode) {
-        if (!state.modes.includes(request.preset.mode))
-          throw new Error(
-            'This capture mode is unavailable on the camera. Your preset has been kept.',
-          );
-        await command(`mode-${request.preset.mode}`);
-      }
-      // Lens and format can change the available controls, so re-read each acknowledgement.
-      const order = [
-        'position',
-        'profile',
-        'stabilization',
-        'audio',
-        'grid',
-        'zoom',
-        'exposure',
-        'timer',
-        'flash',
-        'timerLight',
-      ];
-      const settings = [...(request?.preset.settings ?? [])].sort(
-        (a, b) => order.indexOf(a.key) - order.indexOf(b.key),
-      );
-      for (const setting of settings) {
-        state = getState();
-        if (!supportsSetting(state, setting))
-          throw new Error(
-            `The saved ${setting.key} setting is unavailable with this camera configuration. Review the device settings. Your preset has been kept.`,
-          );
-        await command({ ...setting, type: 'settings', revision: state.settings!.revision });
-      }
-      state = getState();
+      if (request) await applyCameraPreset(request.preset, getState, command);
+      const state = getState();
       appliedQuality.current.add(qualityKey(state));
       // An explicit device preset takes priority over the app's starting quality.
       if (!request?.preset.settings.some((setting) => setting.key === 'profile')) {

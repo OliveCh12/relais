@@ -1,5 +1,6 @@
 import { parseCaptureState, type CaptureMode, type CaptureState } from './protocol';
 import { parseSettingsAction, type CameraSetting } from './settings';
+import { changesCatalog } from './settingPolicy';
 
 export type PresetSetting = Exclude<CameraSetting, { key: 'focus' }>;
 export interface CameraPreset {
@@ -56,8 +57,16 @@ export function previewPreset(state: CaptureState, preset?: CameraPreset): Captu
         Object.assign(settings, { [item.key]: item.value });
     }
   }
-  // A format catalogue only describes the mode and lens last reported by the camera.
-  if (next.mode !== state.mode || settings.position !== state.settings.position) {
+  // A catalogue describes the mode, lens and stabilization last confirmed by the camera.
+  if (
+    next.mode !== state.mode ||
+    preset.settings.some(
+      (item) =>
+        changesCatalog(item.key) &&
+        settings[item.key as keyof typeof settings] !==
+          state.settings![item.key as keyof typeof settings],
+    )
+  ) {
     settings.profiles = [];
     settings.profile = null;
   }

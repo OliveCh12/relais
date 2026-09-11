@@ -25,6 +25,7 @@ import { NitroModules } from 'react-native-nitro-modules';
 import type { CaptureAction, CaptureMode, CaptureState } from '../../../../src/capture/protocol';
 import { PhotoTimer } from '../../../../src/capture/PhotoTimer';
 import { profileId, type SettingsAction } from '../../../../src/capture/settings';
+import { isLiveSetting } from '../../../../src/capture/settingPolicy';
 import NativeEngine from './CameraModule';
 import type { RecordingProfile } from '../recordingProfiles';
 import { RecordingController } from '../RecordingController';
@@ -33,6 +34,7 @@ import { closestRecordingProfile, recordingResolutionLabel } from '../recordingP
 const PHOTO_RESOLUTION = { width: 8192, height: 6144 };
 
 export function useLocalCameraEngine(isFocused: boolean) {
+  const [hardware] = useState(() => NativeEngine.getHardware());
   const [mode, setMode] = useState<CaptureMode>('photo');
   const modeRef = useRef<CaptureMode>('photo');
   const photoBusy = useRef(false);
@@ -310,20 +312,6 @@ export function useLocalCameraEngine(isFocused: boolean) {
     setEnabled(true);
   };
 
-  const setMicrophone = async (value: boolean) => {
-    if (busy || value === audio) return;
-    const request = screenGeneration.current;
-    const granted = !value || (await VisionCamera.requestMicrophonePermission());
-    if (!visibleRef.current || request !== screenGeneration.current) return;
-    if (!granted) {
-      throw new Error('Allow microphone access in Settings on the camera phone to record audio.');
-    }
-    updateReady(false);
-    setError('');
-    advanceRevision();
-    setAudio(value);
-  };
-
   const start = () => {
     const request = visibilityGeneration.current;
     return recorder.start(async () => {
@@ -582,7 +570,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
     }
     if (
       typeof action === 'object' &&
-      ['zoom', 'grid', 'exposure', 'focus'].includes(action.key) &&
+      isLiveSetting(action.key) &&
       readyRef.current &&
       recorder.getSnapshot().phase === 'recording'
     ) {
@@ -645,6 +633,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
   }, [activeOutput, mode, updateReady, finishConfiguration, advanceRevision]);
 
   const captureState: CaptureState = {
+    hardware,
     mode,
     modes: ['photo', 'video'],
     phase: recording.phase,
@@ -721,18 +710,6 @@ export function useLocalCameraEngine(isFocused: boolean) {
   return {
     mode,
     grid,
-    setGrid: (value: boolean) => {
-      advanceRevision();
-      setGrid(value);
-    },
-    stabilization,
-    setStabilization: (value: boolean) => {
-      if (!busy && ready) {
-        advanceRevision();
-        updateReady(false);
-        setStabilization(value);
-      }
-    },
     selectMode,
     cancelTimer: () => photoTimer.cancel(),
     setExposure: (value: number) =>
@@ -750,19 +727,6 @@ export function useLocalCameraEngine(isFocused: boolean) {
     quality,
     profiles,
     selectedProfile,
-    selectProfile: (profile: RecordingProfile) => {
-      if (
-        busy ||
-        (selectedProfile?.height === profile.height &&
-          selectedProfile.fps === profile.fps &&
-          selectedProfile.hdr === profile.hdr)
-      )
-        return;
-      updateReady(false);
-      advanceRevision();
-      setRequested(profile);
-      setError('');
-    },
     focus: async (point: Point) => {
       if (!readyRef.current || !cameraRef.current) throw new Error('Camera is not ready.');
       await cameraRef.current.focusTo(point, {
@@ -790,7 +754,6 @@ export function useLocalCameraEngine(isFocused: boolean) {
     hasCamera: !!device,
     canFlip: !!alternate,
     open,
-    setMicrophone,
     flip,
     start,
     stop,

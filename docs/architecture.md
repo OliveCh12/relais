@@ -2,6 +2,8 @@
 
 Foundation: September 9, 2026. Native capture updated September 10. One app selects a Camera or Monitor role; the target is iOS ↔ Android without accounts or cloud media. The native-buffer-to-WebRTC integration and product commands are implemented; physical-device evidence is tracked separately in STATUS.md.
 
+The [product foundation review](product-foundation-review.md) defines the local/remote settings contract, implemented dependency ordering, native hardware reporting and the remaining field-release gates, including autonomous rendezvous and priority Stop handling.
+
 ```text
 Camera / Monitor UI → session + typed commands
                             ↓

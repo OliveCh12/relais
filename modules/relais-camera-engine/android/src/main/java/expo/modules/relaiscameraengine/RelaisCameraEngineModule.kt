@@ -3,6 +3,7 @@ package expo.modules.relaiscameraengine
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.net.Uri
+import android.os.Build
 import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
@@ -18,6 +19,10 @@ class RelaisCameraEngineModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("RelaisCameraEngine")
+    Function("getHardware") {
+      mapOf("platform" to "android", "manufacturer" to Build.MANUFACTURER,
+        "model" to Build.MODEL, "osVersion" to Build.VERSION.RELEASE)
+    }
     lateinit var galleryLauncher: AppContextActivityResultLauncher<GalleryPickerRequest, Uri?>
     RegisterActivityContracts {
       galleryLauncher = registerForActivityResult(GalleryPickerContract())

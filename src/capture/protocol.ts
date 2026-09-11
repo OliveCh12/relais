@@ -4,6 +4,7 @@ import {
   type CameraSettings,
   type SettingsAction,
 } from './settings';
+import { parseCameraHardware, type CameraHardware } from './hardware';
 export type CaptureMode = 'photo' | 'video' | 'cinematic';
 export type CaptureAction =
   | 'photo'
@@ -16,6 +17,7 @@ export type CaptureAction =
   | 'mode-cinematic'
   | SettingsAction;
 export interface CaptureState {
+  hardware?: CameraHardware;
   mode: CaptureMode;
   modes: CaptureMode[];
   phase: string;
@@ -128,7 +130,10 @@ export function parseCaptureState(value: unknown): CaptureState | null {
     return null;
   const settings = state.settings === undefined ? undefined : parseCameraSettings(state.settings);
   if (settings === null) return null;
+  const hardware = state.hardware === undefined ? undefined : parseCameraHardware(state.hardware);
+  if (hardware === null) return null;
   return {
+    ...(hardware ? { hardware } : {}),
     ...(settings ? { settings } : {}),
     mode: state.mode,
     modes: state.modes,

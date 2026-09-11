@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DeviceRegistry, type DeviceStorage } from '../src/connections/registry';
-import { emptyCaptureState, type CaptureState } from '../src/capture/protocol';
+import { emptyCaptureState, type CaptureAction, type CaptureState } from '../src/capture/protocol';
 import { parsePreset, previewPreset, supportsSetting } from '../src/capture/presets';
+import { applyCameraPreset } from '../src/capture/applyPreset';
 
 const camera: CaptureState = {
   ...emptyCaptureState,
@@ -61,6 +62,83 @@ test('offline choices do not change the cached device or invent format catalogue
   assert.equal(supportsSetting(camera, { key: 'timer', value: 3 }), false);
   assert.equal(supportsSetting(camera, { key: 'exposure', value: 8 }), false);
 });
+
+test('presets change stabilization before selecting a newly available high-frame-rate profile', async () => {
+  let state = structuredClone(camera);
+  const actions: CaptureAction[] = [];
+  const highRate = { id: '2160-120-false', height: 2160, fps: 120, hdr: false };
+  await applyCameraPreset(
+    {
+      settings: [
+        { key: 'profile', value: highRate.id },
+        { key: 'stabilization', value: false },
+      ],
+    },
+    () => state,
+    async (action) => {
+      actions.push(action);
+      assert.equal(typeof action, 'object');
+      if (typeof action !== 'object') return;
+      assert.equal(action.revision, state.settings!.revision);
+      if (action.key === 'stabilization') {
+        state = {
+          ...state,
+          settings: {
+            ...state.settings!,
+            stabilization: false,
+            profiles: [...state.settings!.profiles, highRate],
+            revision: 4,
+          },
+        };
+      } else {
+        assert.equal(action.key, 'profile');
+        assert.equal(action.value, highRate.id);
+      }
+    },
+  );
+  assert.deepEqual(
+    actions.map((action) => typeof action === 'object' && action.key),
+    ['stabilization', 'profile'],
+  );
+});
+
+test('a rejected configuration stops preset application before dependent format changes', async () => {
+  const actions: CaptureAction[] = [];
+  await assert.rejects(
+    applyCameraPreset(
+      {
+        settings: [
+          { key: 'profile', value: '2160-60-false' },
+          { key: 'stabilization', value: false },
+        ],
+      },
+      () => camera,
+      async (action) => {
+        actions.push(action);
+        throw new Error('Native configuration failed');
+      },
+    ),
+    /Native configuration failed/,
+  );
+  assert.equal(actions.length, 1);
+  assert.deepEqual(actions[0], {
+    type: 'settings',
+    revision: 3,
+    key: 'stabilization',
+    value: false,
+  });
+});
+
+test('changing stabilization invalidates the cached catalog until the camera confirms it', () => {
+  const preview = previewPreset(camera, { settings: [{ key: 'stabilization', value: false }] });
+  assert.deepEqual(preview.settings?.profiles, []);
+  assert.equal(preview.settings?.profile, null);
+  assert.equal(camera.settings?.stabilization, true);
+  assert.deepEqual(
+    previewPreset(camera, { settings: [{ key: 'stabilization', value: true }] }).settings?.profiles,
+    camera.settings?.profiles,
+  );
+});
 test('camera preferences survive restart/re-pairing while corrupt cache never loses credentials', async () => {
   const values = new Map<string, string>();
   const storage: DeviceStorage = {
@@ -84,7 +162,13 @@ test('camera preferences survive restart/re-pairing while corrupt cache never lo
   };
   const registry = create();
   await registry.remember(device);
-  await registry.cacheCamera(device.id, camera);
+  const hardware = {
+    platform: 'android' as const,
+    manufacturer: 'Google',
+    model: 'Pixel 11 Pro',
+    osVersion: '17',
+  };
+  await registry.cacheCamera(device.id, { ...camera, hardware });
   await registry.savePreset(device.id, () => ({
     mode: 'video',
     settings: [{ key: 'profile', value: '2160-60-false' }],
@@ -94,6 +178,7 @@ test('camera preferences survive restart/re-pairing while corrupt cache never lo
   await restarted.load();
   assert.equal(restarted.getSnapshot()[0]?.preset?.settings[0]?.value, '2160-60-false');
   assert.equal(restarted.getSnapshot()[0]?.camera?.settings?.profile, '2160-60-false');
+  assert.deepEqual(restarted.getSnapshot()[0]?.camera?.hardware, hardware);
   values.set(`relais.camera.${device.id}`, '{');
   const recovered = create();
   await recovered.load();
