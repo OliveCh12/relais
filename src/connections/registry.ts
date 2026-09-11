@@ -1,3 +1,5 @@
+import { cameraSnapshot, parsePreset, type CameraPreset } from '../capture/presets';
+import { parseCaptureState, type CaptureState } from '../capture/protocol';
 import {
   isIdentity,
   MAX_DEVICES,
@@ -64,6 +66,32 @@ export class DeviceRegistry {
           if (!raw) throw new Error('A saved device entry is incomplete.');
           const device = parseSavedDevice(JSON.parse(raw));
           if (device.id !== id) throw new Error('A saved device entry is invalid.');
+          try {
+            const raw = await this.storage.get(`relais.camera.${id}`);
+            if (raw) {
+              const cached = JSON.parse(raw);
+              const profiles = (
+                await Promise.all(
+                  [0, 1].map(async (part) => {
+                    const chunk = await this.storage.get(`relais.profiles.${id}.${part}`);
+                    return chunk ? (JSON.parse(chunk) as string[]) : [];
+                  }),
+                )
+              )
+                .flat()
+                .map((id) => {
+                  const [height, fps, hdr] = id.split('-');
+                  return { id, height: Number(height), fps: Number(fps), hdr: hdr === 'true' };
+                });
+              const camera = parseCaptureState({
+                ...cached,
+                settings: { ...cached.settings, profiles },
+              });
+              if (camera) device.camera = camera;
+            }
+          } catch {
+            /* An invalid capability cache must never discard pairing credentials. */
+          }
           return device;
         }),
       );
@@ -90,13 +118,20 @@ export class DeviceRegistry {
       if (!previous && this.devices.length >= MAX_DEVICES)
         throw new Error('Forget a device before adding another one.');
       // Preserve the name chosen locally across reconnects.
-      const next = { ...device, name: previous?.name ?? device.name };
+      const next = { ...previous, ...device, name: previous?.name ?? device.name };
       const devices = [...this.devices.filter((item) => item.id !== next.id), next];
-      await this.storage.set(`relais.device.${next.id}`, JSON.stringify(next));
+      await this.storage.set(
+        `relais.device.${next.id}`,
+        JSON.stringify({ ...next, camera: undefined }),
+      );
       await this.storage.set('relais.devices', JSON.stringify(devices.map((item) => item.id)));
       this.publish(devices);
       return next;
     });
+  }
+  async getDevice(id: string) {
+    await this.load();
+    return this.serialize(async () => this.devices.find((item) => item.id === id));
   }
   async rename(id: string, name: string) {
     if (!validName(name.trim())) throw new Error('Choose a name between 1 and 60 characters.');
@@ -105,7 +140,42 @@ export class DeviceRegistry {
       const previous = this.devices.find((item) => item.id === id);
       if (!previous) return;
       const next = { ...previous, name: name.trim() };
-      await this.storage.set(`relais.device.${id}`, JSON.stringify(next));
+      await this.storage.set(`relais.device.${id}`, JSON.stringify({ ...next, camera: undefined }));
+      this.publish(this.devices.map((item) => (item.id === id ? next : item)));
+    });
+  }
+  async cacheCamera(id: string, state: CaptureState) {
+    if (!state.ready || !state.settings) return;
+    const camera = cameraSnapshot(state);
+    if (!camera?.settings) return;
+    await this.load();
+    return this.serialize(async () => {
+      const previous = this.devices.find((item) => item.id === id);
+      if (!previous || JSON.stringify(previous.camera) === JSON.stringify(camera)) return;
+      const profiles = camera.settings!.profiles.map((profile) => profile.id);
+      for (const part of [0, 1])
+        await this.storage.set(
+          `relais.profiles.${id}.${part}`,
+          JSON.stringify(profiles.slice(part * 64, (part + 1) * 64)),
+        );
+      await this.storage.set(
+        `relais.camera.${id}`,
+        JSON.stringify({ ...camera, settings: { ...camera.settings, profiles: [] } }),
+      );
+      this.publish(this.devices.map((item) => (item.id === id ? { ...item, camera } : item)));
+    });
+  }
+  async savePreset(id: string, edit: (previous?: CameraPreset) => CameraPreset | undefined) {
+    await this.load();
+    return this.serialize(async () => {
+      const previous = this.devices.find((item) => item.id === id);
+      if (!previous) throw new Error('This camera is no longer saved.');
+      const edited = edit(previous.preset);
+      const preset = parsePreset(edited);
+      if (edited && !preset) throw new Error('Invalid camera preset.');
+      const { preset: _old, ...rest } = previous;
+      const next = { ...rest, ...(preset ? { preset } : {}) };
+      await this.storage.set(`relais.device.${id}`, JSON.stringify({ ...next, camera: undefined }));
       this.publish(this.devices.map((item) => (item.id === id ? next : item)));
     });
   }
@@ -116,6 +186,8 @@ export class DeviceRegistry {
       await this.storage.set('relais.devices', JSON.stringify(devices.map((item) => item.id)));
       this.publish(devices);
       await this.storage.remove(`relais.device.${id}`);
+      await this.storage.remove(`relais.camera.${id}`);
+      for (const part of [0, 1]) await this.storage.remove(`relais.profiles.${id}.${part}`);
     });
   }
 }

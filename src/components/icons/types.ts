@@ -1,4 +1,5 @@
 export type IconName =
+  | 'sun'
   | 'check'
   | 'camera'
   | 'monitor'
@@ -33,6 +34,7 @@ export interface IconProps {
 }
 
 export const sfSymbols = {
+  sun: 'sun.max.fill',
   check: 'checkmark.circle.fill',
   camera: 'camera.fill',
   monitor: 'viewfinder',

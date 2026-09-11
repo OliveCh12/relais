@@ -1,14 +1,22 @@
-# Project status — September 10, 2026
+# Project status — September 11, 2026
 
 **Camera and Monitor now share a product flow for photos, native video recording and remote shutter/start/stop.** Continuous native focus, exposure and color remain automatic, with optional native tap metering and exposure compensation. The local writer is independent of the reduced native WebRTC preview. The Mac rendezvous and physical-device validation remain required.
 
+## Relay root, viewfinder and unified device page
+
+- GestureHandlerRootView now surrounds the complete navigator. The remote video has a non-collapsible native container, correct Android layer ordering and dimension-aware focus mapping.
+- Hold/drag adjusts native focus and exposure locally and remotely; UI-thread square/sun/rail feedback does not process camera frames in JavaScript. Plain camera controls use native icons with comfortable targets.
+- Device information and camera settings use native expandable groups on one device page, with Connect/Live in the app bar. Offline presets and the last native capability catalog persist across restart. Every queued change is validated against fresh acknowledgements on connection.
+- Code checks currently pass: strict TypeScript, zero ESLint warnings/errors, 49 tests, boundaries and formatting. Final production bundles for iOS, Android and web passed. iPhone and Android ARM64 native builds passed and were installed on the paired iPhone 17 Pro and Pixel 11 Pro, preserving app data; strict iOS signature verification passed. Native dependencies still emit compiler/linker and Gradle deprecation warnings; these are not suppressed.
+- Physical relay, metering accuracy and gallery acceptance remain owner-run. [Bidirectional test guide](docs/relay-testing.md), [implementation and primary sources](docs/research/relay-viewfinder.md).
+
 ## Native camera controls and device details
 
-- Device names auto-save on blur/keyboard Done, with serialized writes, native progress/check indicators and retryable errors. Connect is a separate prominent native button. Device, pairing and Info navigation stays in platform stacks.
+- Device names auto-save on blur/keyboard Done, with serialized writes, native progress/check indicators and retryable errors. Connect is now in the native app bar; device and pairing navigation stays in platform stacks.
 - Both platforms expose native exposure compensation, Photo timer and flash choices locally and remotely. The capture phone owns the countdown and cancels it on interruption. Android optionally lights the native torch during countdown. Camera settings use a SwiftUI stack page on iOS and a Material grouped bottom sheet on Android.
 - Camera selectors support swiping between real modes. Android gallery/flip actions use native rounded-square tonal buttons. iOS gallery selection uses PhotosPicker/Quick Look; Android delegates to the system gallery app. The existing recording/preview owners and original-media saving paths remain intact.
 - Android exposure indices are converted using the sensor's native compensation step; the shared UI/protocol use applied EV values. Pixel-specific shadows and manual white balance stay automatic because the installed owner does not expose those controls.
-- Validation: strict TypeScript, ESLint with zero project warnings, all 40 tests, architecture boundaries and formatting passed. iOS, Android and web production exports passed. iOS device and Android ARM64 builds passed; iOS strict signature verification passed. The Pixel received the new APK without clearing data. The iPhone is offline, so installation of this pass is pending reconnection. Native dependencies still emit compiler/linker and Gradle deprecation warnings; they are not suppressed. The owner performs physical capture and visual acceptance; no camera operation was performed as QA in this pass.
+- Validation: strict TypeScript, ESLint with zero project warnings, all 40 tests, architecture boundaries and formatting passed. iOS, Android and web production exports passed. iOS device and Android ARM64 builds passed; iOS strict signature verification passed. The Pixel received the new APK without clearing data. Both phones now have the updated native development build, as recorded above. Native dependencies still emit compiler/linker and Gradle deprecation warnings; they are not suppressed. The owner performs physical capture and visual acceptance; no camera operation was performed as QA in this pass.
 - [Native controls, implementation and primary sources](docs/research/native-camera-controls.md).
 
 ## Photo and remote capture integration

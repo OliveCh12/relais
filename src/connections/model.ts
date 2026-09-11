@@ -1,3 +1,5 @@
+import type { CaptureState } from '../capture/protocol';
+import { parsePreset, type CameraPreset } from '../capture/presets';
 import { privateLanOrigin, validId, validToken } from '../signaling/protocol';
 
 export const MAX_DEVICES = 12;
@@ -11,6 +13,8 @@ export interface SavedDevice extends DeviceIdentity {
   secret: string;
   server: string;
   lastConnectedAt: number;
+  camera?: CaptureState;
+  preset?: CameraPreset;
 }
 export const validName = (name: unknown): name is string =>
   typeof name === 'string' &&
@@ -40,6 +44,7 @@ export function parseSavedDevice(value: unknown): SavedDevice {
     secret: v.secret,
     server: privateLanOrigin(v.server),
     lastConnectedAt: v.lastConnectedAt,
+    ...(parsePreset(v.preset) ? { preset: parsePreset(v.preset)! } : {}),
   };
 }
 

@@ -30,6 +30,7 @@ export interface CameraSettings {
   canStabilize: boolean;
 }
 export type CameraSetting =
+  | { key: 'focus'; value: { x: number; y: number } }
   | { key: 'profile'; value: string }
   | { key: 'audio' | 'grid' | 'stabilization' | 'timerLight'; value: boolean }
   | { key: 'position'; value: 'front' | 'back' }
@@ -51,7 +52,14 @@ export function parseSettingsAction(value: unknown): SettingsAction | null {
     !finite(v.revision, 0, Number.MAX_SAFE_INTEGER)
   )
     return null;
+  const point = v.value as { x?: unknown; y?: unknown } | null;
   const valid =
+    (v.key === 'focus' &&
+      !!point &&
+      typeof point === 'object' &&
+      Object.keys(point).every((key) => ['x', 'y'].includes(key)) &&
+      finite(point.x, 0, 1) &&
+      finite(point.y, 0, 1)) ||
     (v.key === 'profile' &&
       typeof v.value === 'string' &&
       /^\d{2,5}-\d{1,3}-(true|false)$/.test(v.value)) ||

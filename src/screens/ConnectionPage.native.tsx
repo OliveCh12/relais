@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Share, View } from 'react-native';
-import { Stack, router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { Share, View } from 'react-native';
+import { Stack, router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCaptureSession } from '@/capture/SessionContext';
@@ -8,34 +8,18 @@ import { SettingsPage } from '@/components/SettingsPage';
 import type { SettingsPageProps } from '@/components/SettingsPage.types';
 import { PairingCodeImage } from '@/components/connection/PairingCodeImage';
 import { QrScanner } from '@/components/QrScanner';
-import { availabilityLabels } from '@/connections/model';
-import { useDevices } from '@/connections/useDevices';
-import { deviceRegistry } from '@/connections/storage';
-import { linkQuality } from '@/connections/quality';
 import { parsePairingQr, privateLanOrigin } from '@/signaling/protocol';
 import { useAppTheme } from '@/design/useAppTheme';
 
-export type ConnectionPageKind = 'add' | 'connect' | 'device' | 'info' | 'server' | 'code' | 'scan';
+export type ConnectionPageKind = 'add' | 'connect' | 'server' | 'code' | 'scan';
 export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
-  const { role, connection, fill, setFill, connectTo } = useCaptureSession();
+  const { connection, connectTo } = useCaptureSession();
   const focused = useIsFocused();
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const devices = useDevices(
-    connection.server,
-    focused &&
-      role === 'monitor' &&
-      !!id &&
-      (page === 'device' || page === 'info') &&
-      !connection.connected,
-    id,
-  );
-  const row = devices.rows.find((item) => item.device.id === id);
   const [error, setError] = useState('');
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { setMetricsEnabled } = connection;
-  const measure =
-    focused && page === 'info' && connection.connected && (!id || connection.device?.id === id);
+  const measure = focused && page === 'connect' && connection.connected;
   useEffect(() => {
     setMetricsEnabled(measure);
     return () => setMetricsEnabled(false);
@@ -49,10 +33,9 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
       setError('This code is invalid or expired. Show a new code on the camera phone.');
     }
   };
-  let title: string = 'Info';
+  let title: string = 'Connection';
   let sections: SettingsPageProps['sections'] = [];
   let content: SettingsPageProps['content'];
-  let header: SettingsPageProps['header'];
   if (page === 'add') {
     title = 'Add camera';
     sections = [
@@ -158,10 +141,23 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
               ]
             : []),
           {
-            kind: 'action',
-            label: 'Info',
-            icon: 'info',
-            onPress: () => router.push('/camera/info'),
+            kind: 'group',
+            label: 'Connection',
+            icon: 'wifi',
+            rows: [
+              {
+                kind: 'value',
+                label: 'Monitor',
+                value: connection.device?.name ?? 'Not connected',
+                icon: 'device',
+              },
+              {
+                kind: 'value',
+                label: 'Availability',
+                value: connection.connected ? 'Connected' : connection.status,
+              },
+              { kind: 'value', label: 'Connection service', value: connection.server },
+            ],
           },
           ...(!connection.qr && !connection.connected
             ? [
@@ -178,166 +174,6 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
     ];
     if (connection.qr && !connection.connected)
       content = <PairingCodeImage value={JSON.stringify(connection.qr)} />;
-  } else if (page === 'device') {
-    title = row?.device.name ?? 'Camera';
-    if (row) {
-      header = {
-        title: row.device.name,
-        subtitle: 'Connect to this camera to take photos and record video remotely.',
-        icon: 'device',
-      };
-      sections = [
-        {
-          title: 'Saved camera',
-          rows: [
-            {
-              kind: 'name',
-              id: row.device.id,
-              label: 'Name on this phone',
-              value: row.device.name,
-              onSave: (name) => deviceRegistry.rename(row.device.id, name),
-            },
-            {
-              kind: 'action',
-              label:
-                connection.device?.id === row.device.id && connection.connected
-                  ? 'Back to camera'
-                  : 'Connect',
-              icon: 'camera',
-              prominent: true,
-              disabled:
-                !row.descriptor &&
-                !(connection.connected && connection.device?.id === row.device.id),
-              onPress: () => {
-                if (row.descriptor) connectTo(row.descriptor, row.device);
-                else router.dismissTo('/monitor');
-              },
-            },
-            {
-              kind: 'action',
-              label: 'Info',
-              icon: 'info',
-              onPress: () =>
-                router.push({ pathname: '/monitor/info', params: { id: row.device.id } }),
-            },
-          ],
-          footer: 'Open Camera on this device and keep both phones on the same Wi-Fi network.',
-        },
-        {
-          title: 'Pairing',
-          rows: [
-            {
-              kind: 'action',
-              label: 'Forget this camera',
-              destructive: true,
-              onPress: () =>
-                Alert.alert(
-                  'Forget this camera?',
-                  'You can pair it again with its connection code.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Forget',
-                      style: 'destructive',
-                      onPress: () => {
-                        void deviceRegistry
-                          .forget(row.device.id)
-                          .then(() => router.dismissTo('/monitor'))
-                          .catch(showError);
-                      },
-                    },
-                  ],
-                ),
-            },
-          ],
-        },
-      ];
-    } else
-      sections = [
-        {
-          title: 'Camera unavailable',
-          footer: 'This saved camera is no longer on this phone.',
-          rows: [],
-        },
-      ];
-  } else {
-    const saved = id
-      ? devices.rows.find((item) => item.device.id === id)?.device
-      : connection.device;
-    const connected = connection.connected && (!id || connection.device?.id === id);
-    const quality = connected ? linkQuality(connection.quality) : null;
-    const sample = connected ? connection.quality : null;
-    sections = [
-      {
-        title: saved?.name ?? 'Connection',
-        rows: [
-          {
-            kind: 'value',
-            label: 'Availability',
-            value: connected
-              ? 'Connected'
-              : row
-                ? availabilityLabels[row.availability]
-                : 'Not connected',
-            icon: 'device',
-          },
-          {
-            kind: 'value',
-            label: 'Signal quality',
-            value: quality?.label ?? 'Connect to measure',
-            icon: quality ? `link${quality.bars}` : 'link0',
-          },
-          ...(saved
-            ? [
-                {
-                  kind: 'value' as const,
-                  label: 'Last connected',
-                  value: new Date(saved.lastConnectedAt).toLocaleString('en-US'),
-                },
-              ]
-            : []),
-        ],
-        footer:
-          'Signal quality describes this connection, not Wi-Fi reception. Measurements run only while Info is open.',
-      },
-      {
-        title: 'Connection details',
-        rows: [
-          {
-            kind: 'value',
-            label: 'Round-trip delay',
-            value: sample?.rtt != null ? `${Math.round(sample.rtt)} ms` : 'Not measured',
-          },
-          {
-            kind: 'value',
-            label: 'Packet loss',
-            value: sample?.loss != null ? `${(sample.loss * 100).toFixed(1)}%` : 'Not measured',
-          },
-          {
-            kind: 'value',
-            label: 'Jitter',
-            value:
-              sample?.jitter != null ? `${Math.round(sample.jitter * 1000)} ms` : 'Not measured',
-          },
-          {
-            kind: 'value',
-            label: 'Camera quality',
-            value: connection.remote?.quality ?? 'On the camera phone',
-          },
-          { kind: 'value', label: 'Connection service', value: saved?.server ?? connection.server },
-        ],
-      },
-      ...(role === 'monitor' && connected
-        ? [
-            {
-              title: 'Preview',
-              rows: [
-                { kind: 'toggle' as const, label: 'Fill screen', value: fill, onChange: setFill },
-              ],
-            },
-          ]
-        : []),
-    ];
   }
   if (error && page !== 'scan')
     sections.push({ title: 'Could not complete this action', footer: error, rows: [] });
@@ -345,11 +181,7 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
     <View style={{ flex: 1, backgroundColor: theme.background, paddingBottom: insets.bottom }}>
       <Stack.Screen options={{ title }} />
       <StatusBar style="auto" />
-      <SettingsPage
-        sections={sections}
-        {...(header ? { header } : {})}
-        {...(content ? { content } : {})}
-      />
+      <SettingsPage sections={sections} {...(content ? { content } : {})} />
     </View>
   );
 }

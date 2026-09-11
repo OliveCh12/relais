@@ -37,7 +37,12 @@ export function useConnection(
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [device, setDevice] = useState<SavedDevice | null>(null);
   const [quality, setQuality] = useState<LinkSample | null>(null);
-  const [remote, setRemote] = useState<CaptureState | null>(null);
+  const [remote, updateRemote] = useState<CaptureState | null>(null);
+  const remoteRef = useRef<CaptureState | null>(null);
+  const setRemote = useCallback((state: CaptureState | null) => {
+    remoteRef.current = state;
+    updateRemote(state);
+  }, []);
   const [sending, setSending] = useState(false);
   const [retry, setRetry] = useState(0);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,7 +57,7 @@ export function useConnection(
   const pending = useRef<{
     id: string;
     action: CaptureAction;
-    resolve: () => void;
+    resolve: (state: CaptureState | null) => void;
     reject: (error: Error) => void;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
@@ -95,7 +100,7 @@ export function useConnection(
     setQuality(null);
     setSending(false);
     setConnectionError(null);
-  }, []);
+  }, [setRemote]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -193,7 +198,7 @@ export function useConnection(
                 if (message.ok === true) {
                   const state = parseCaptureState(message.state);
                   if (state) setRemote(state);
-                  request.resolve();
+                  request.resolve(state ?? remoteRef.current);
                 } else
                   request.reject(
                     new Error(
@@ -219,7 +224,7 @@ export function useConnection(
         );
       }
     },
-    [publish, role, server, stop],
+    [publish, role, server, stop, setRemote],
   );
 
   useEffect(() => {
@@ -249,14 +254,14 @@ export function useConnection(
 
   const command = useCallback(
     (action: CaptureAction) =>
-      new Promise<void>((resolve, reject) => {
+      new Promise<CaptureState | null>((resolve, reject) => {
         if (!trusted.current || !session.current) {
           reject(new Error('Connect to your camera first.'));
           return;
         }
         if (pending.current?.action === 'photo' && action === 'cancel-timer') {
           clearTimeout(pending.current.timer);
-          pending.current.resolve();
+          pending.current.resolve(null);
           pending.current = null;
         }
         if (pending.current) {
@@ -288,6 +293,8 @@ export function useConnection(
     [],
   );
 
+  const getEpoch = useCallback(() => generation.current, []);
+  const getRemote = useCallback(() => remoteRef.current, []);
   const diagnostics = useCallback(() => session.current?.diagnostics(), []);
   const setMetricsEnabled = useCallback((enabled: boolean) => {
     metricsEnabled.current = enabled;
@@ -308,6 +315,8 @@ export function useConnection(
     device,
     quality,
     remote,
+    getRemote,
+    getEpoch,
     sending,
     focused: focused && foreground,
     start,

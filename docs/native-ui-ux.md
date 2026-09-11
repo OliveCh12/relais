@@ -6,23 +6,25 @@ For new component work, consult the [native components and interaction-performan
 
 ## Current journey — September 10
 
-| Surface              | iPhone                                                                    | Android                                                                        |
-| -------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Home                 | SwiftUI Form/Section                                                      | Material ListItem actions                                                      |
-| My cameras           | Native inset-grouped list, device icon and availability                   | Material Card/ListItem groups, circular device icons and availability          |
-| Device details       | Native auto-saving TextField, progress/check and prominent Connect Button | Native auto-saving OutlinedTextField, progress/check and filled Connect Button |
-| Navigation           | Native stack pages with Back for device, pairing and Info                 | Native stack pages with Back for device, pairing and Info                      |
-| Camera modes         | Segmented Picker: Photo, Video, supported Cinematic; swipe between modes  | Material segmented buttons: Photo/Video; swipe between modes                   |
-| Camera actions       | SwiftUI shutter, native gallery and SF Symbols                            | Circular shutter, rounded-square tonal gallery/flip buttons, Material Symbols  |
-| Camera settings      | NavigationStack/Form with native pickers, toggles and sliders             | Material ModalBottomSheet with grouped lists                                   |
-| Brightness and timer | Native exposure slider, toolbar timer and Photo settings                  | Material exposure slider, Photo timer and optional countdown light             |
-| Remote settings      | Native settings page identifying the capturing device                     | Native settings sheet identifying the capturing device                         |
+| Surface              | iPhone                                                                    | Android                                                                         |
+| -------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Home                 | SwiftUI Form/Section                                                      | Material ListItem actions                                                       |
+| My cameras           | Native inset-grouped list, device icon and availability                   | Material Card/ListItem groups, circular device icons and availability           |
+| Device details       | Native auto-saving TextField, progress/check and prominent Connect Button | Native auto-saving OutlinedTextField, progress/check and app-bar Connect Button |
+| Navigation           | Native stack pages with Back for device and pairing                       | Native stack pages with Back for device and pairing                             |
+| Camera modes         | Segmented Picker: Photo, Video, supported Cinematic; swipe between modes  | Material segmented buttons: Photo/Video; swipe between modes                    |
+| Camera actions       | SwiftUI shutter, native gallery and SF Symbols                            | Circular shutter, rounded-square tonal gallery/flip buttons, Material Symbols   |
+| Camera settings      | NavigationStack/Form with native pickers, toggles and sliders             | Material ModalBottomSheet with grouped lists                                    |
+| Brightness and timer | Native exposure slider, toolbar timer and Photo settings                  | Material exposure slider, Photo timer and optional countdown light              |
+| Remote settings      | Native device page identifying the capturing device                       | Native device page identifying the capturing device                             |
 
-Home → Camera captures local originals and shares a reduced native preview. Home → Monitor lists saved devices. Tapping a device opens its details; Connect starts the paired session. Add camera, Scan code, Enter code, Connect a monitor, Info and connection setup are dedicated pages. The scanner unmounts before joining. The session provider retains the existing transport/camera owner across stack pages.
+Home → Camera captures local originals and shares a reduced native preview. Home → Monitor lists saved devices. Tapping a device opens its details; Connect starts the paired session. Add camera, Scan code, Enter code, Connect a monitor and connection setup are dedicated pages. The scanner unmounts before joining. The session provider retains the existing transport/camera owner across stack pages.
 
-Connection and device pages follow the system theme; capture stays dark. Native controls animate themselves. No new UI dependency or video-frame processing in JavaScript was added. Signal statistics remain exclusive to Info.
+Connection and device pages follow the system theme; capture stays dark. Native controls animate themselves. No new UI dependency or video-frame processing in JavaScript was added. Signal statistics run only on focused device/connection detail pages.
 
 The current [controls implementation and API limits](research/native-camera-controls.md) cover auto-saving names, native buttons, gallery access, exposure units, timers, remote control and native settings presentation. Public components take priority over recreating private camera-app widgets. Physical captures, visual acceptance, screen-reader checks and display-frame-rate measurement are owned by the user for this pass; build evidence is recorded in STATUS.md.
+
+Device pages now combine information and presets with native expandable settings groups; there is no separate Info page. Connect stays in the app bar. Touch-hold/vertical-drag provides native focus and exposure, with plain camera buttons. [Implementation and sources](research/relay-viewfinder.md), [acceptance steps](relay-testing.md).
 
 ## Architecture and platform choices
 

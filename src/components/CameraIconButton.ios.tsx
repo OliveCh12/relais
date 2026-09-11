@@ -1,10 +1,11 @@
-import { Platform } from 'react-native';
 import { Button, Host } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
   buttonStyle,
-  buttonBorderShape,
   controlSize,
+  frame,
+  contentShape,
+  shapes,
   disabled,
 } from '@expo/ui/swift-ui/modifiers';
 import { NativeIcon } from './icons/Icon.ios';
@@ -19,24 +20,23 @@ export function CameraIconButton({
   large,
   photo,
 }: CameraIconButtonProps) {
-  const dimension = large ? 84 : 44;
+  const dimension = large ? 84 : 48;
   return (
     <Host colorScheme="dark" style={{ width: dimension, height: dimension }}>
       <Button
         onPress={onPress}
         modifiers={[
-          buttonStyle(
-            large ? 'plain' : parseInt(String(Platform.Version), 10) >= 26 ? 'glass' : 'plain',
-          ),
+          buttonStyle('plain'),
+          frame({ width: dimension, height: dimension }),
+          contentShape(shapes.rectangle()),
           controlSize('regular'),
-          buttonBorderShape('circle'),
           disabled(unavailable),
           accessibilityLabel(label),
         ]}
       >
         <NativeIcon
           name={icon}
-          size={large ? 72 : 22}
+          size={large ? 72 : 24}
           color={
             unavailable ? '#66666B' : large && !photo ? '#FF453A' : selected ? '#FFD60A' : '#FFFFFF'
           }

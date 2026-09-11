@@ -64,10 +64,13 @@ class RelaisPreviewOutput : HybridCameraOutputSpec(), NativeCameraOutput {
 
 object RelaisPreviewFrames {
   private var observer: CapturerObserver? = null
+  @Volatile var rotation = 0
+    private set
   private var lastFrame = 0L
   @Synchronized fun attach(target: CapturerObserver?) { observer = target; lastFrame = 0 }
   @Synchronized fun detach(target: CapturerObserver?) { if (observer === target) observer = null }
   @Synchronized fun deliver(image: ImageProxy) {
+    rotation = image.imageInfo.rotationDegrees
     val target = observer ?: return
     val time = image.imageInfo.timestamp
     if (time > lastFrame && time - lastFrame < 31_000_000L) return

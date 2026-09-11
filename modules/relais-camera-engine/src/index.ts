@@ -10,6 +10,7 @@ declare class RelaisCameraEngineModule extends NativeModule<CameraEventListeners
   openGallery(): Promise<void>;
   getExposureStep(deviceId: string): Promise<number>;
   initializePreviewOutput(): void;
+  getPreviewRotation(): number;
   createPreviewTrack(): Promise<{
     id: string;
     kind: string;

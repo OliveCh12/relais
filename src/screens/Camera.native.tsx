@@ -1,6 +1,5 @@
 import NativeEngine from '../../modules/relais-camera-engine/src';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { ExposureControl } from '@/components/ExposureControl';
+import { ViewfinderGesture } from '@/components/ViewfinderGesture';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -37,14 +36,8 @@ export default function CameraScreen() {
   const { connection, updateCamera } = useCaptureSession();
   const engine = useLocalCameraEngine(connection.focused);
   const [settings, setSettings] = useState(false);
-  const [showExposure, setShowExposure] = useState(false);
   const controls = engine.captureState.settings?.controls;
   const countdown = engine.recording.phase === 'countdown';
-  const previewTap = Gesture.Tap()
-    .runOnJS(true)
-    .onEnd((_event, success) => {
-      if (success) setShowExposure(true);
-    });
   useEffect(() => {
     updateCamera(engine.captureState, engine.perform);
   }, [engine.captureState, engine.perform, updateCamera]);
@@ -107,11 +100,21 @@ export default function CameraScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: !engine.busy }} />
       <StatusBar style="light" />
-      <GestureDetector gesture={Gesture.Simultaneous(Gesture.Native(), previewTap)}>
-        <View style={StyleSheet.absoluteFill} collapsable={false}>
-          <LocalCameraPreview engine={engine} />
-        </View>
-      </GestureDetector>
+      <ViewfinderGesture
+        enabled={engine.ready && (!engine.busy || recording)}
+        nativeZoom
+        {...(controls ? { controls } : {})}
+        onFocus={(point) => engine.focus(point)}
+        onExposure={engine.setExposure}
+        onError={(error) =>
+          Alert.alert(
+            'Camera',
+            error instanceof Error ? error.message : 'Could not adjust the camera.',
+          )
+        }
+      >
+        <LocalCameraPreview engine={engine} />
+      </ViewfinderGesture>
       {grid && engine.enabled && (
         <View pointerEvents="none" style={styles.grid}>
           <View style={[styles.lineV, { left: '33.333%' }]} />
@@ -219,19 +222,6 @@ export default function CameraScreen() {
               onPress={() => act(engine.recover)}
             />
           )}
-          {showExposure &&
-            controls &&
-            controls.maxExposure > controls.minExposure &&
-            !engine.busy && (
-              <ExposureControl
-                value={controls.exposure}
-                min={controls.minExposure}
-                max={controls.maxExposure}
-                disabled={!engine.ready}
-                onChange={(value) => act(() => engine.setExposure(value))}
-                onClose={() => setShowExposure(false)}
-              />
-            )}
           {!landscape && (
             <CameraZoom
               stops={engine.zoomStops}

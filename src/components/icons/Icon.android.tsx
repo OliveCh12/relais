@@ -1,3 +1,4 @@
+import sun from '@expo/material-symbols/wb_sunny.xml';
 import { Host, Icon as ComposeIcon } from '@expo/ui/jetpack-compose';
 import check from '@expo/material-symbols/check_circle.xml';
 import camera from '@expo/material-symbols/photo_camera.xml';
@@ -27,6 +28,7 @@ import link3 from '@expo/material-symbols/signal_cellular_4_bar.xml';
 import type { IconProps } from './types';
 
 const icons = {
+  sun,
   check,
   camera,
   monitor,

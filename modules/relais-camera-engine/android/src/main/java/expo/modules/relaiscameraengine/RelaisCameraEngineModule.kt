@@ -25,6 +25,7 @@ class RelaisCameraEngineModule : Module() {
       manager.getCameraCharacteristics(deviceId)
         .get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)?.toDouble() ?: 0.0
     }
+    Function("getPreviewRotation") { RelaisPreviewFrames.rotation }
     Function("initializePreviewOutput") {
       System.loadLibrary("VisionCamera")
       System.loadLibrary("RelaisPreview")

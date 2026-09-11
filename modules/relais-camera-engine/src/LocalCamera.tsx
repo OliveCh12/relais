@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { unrotatePoint, type Point } from '../../../src/capture/viewfinder';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { AppState, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import {
   Camera,
@@ -433,6 +442,16 @@ export function useLocalCameraEngine(isFocused: boolean) {
     if (action.revision !== revision.current)
       throw new Error('Camera settings changed. Please try again with the updated options.');
     switch (action.key) {
+      case 'focus': {
+        const controller = cameraRef.current?.controller;
+        if (!controller) throw new Error('Camera is not ready.');
+        const point = unrotatePoint(action.value, NativeEngine.getPreviewRotation());
+        await controller.focusTo(VisionCamera.createNormalizedMeteringPoint(point.x, point.y), {
+          adaptiveness: 'continuous',
+          responsiveness: modeRef.current === 'photo' ? 'snappy' : 'steady',
+        });
+        return;
+      }
       case 'exposure': {
         const controller = cameraRef.current?.controller;
         if (
@@ -562,7 +581,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
     }
     if (
       typeof action === 'object' &&
-      ['zoom', 'grid', 'exposure'].includes(action.key) &&
+      ['zoom', 'grid', 'exposure', 'focus'].includes(action.key) &&
       readyRef.current &&
       recorder.getSnapshot().phase === 'recording'
     ) {
@@ -666,6 +685,38 @@ export function useLocalCameraEngine(isFocused: boolean) {
     },
   };
 
+  const snapshotRef = useRef(captureState);
+  const acknowledgements = useRef(new Set<() => void>());
+  useLayoutEffect(() => {
+    snapshotRef.current = captureState;
+    acknowledgements.current.forEach((notify) => notify());
+  });
+  const performConfirmed = async (action: CaptureAction) => {
+    await perform(action);
+    if (typeof action !== 'object' && !action.startsWith('mode-')) return;
+    const targetRevision = revision.current;
+    return new Promise<CaptureState>((resolve, reject) => {
+      const done = () => {
+        const state = snapshotRef.current;
+        if (
+          !state.ready ||
+          (state.settings?.revision ?? -1) < targetRevision ||
+          state.mode !== modeRef.current
+        )
+          return;
+        clearTimeout(timer);
+        acknowledgements.current.delete(done);
+        resolve(state);
+      };
+      const timer = setTimeout(() => {
+        acknowledgements.current.delete(done);
+        reject(new Error('The camera has not confirmed its new settings. Please try again.'));
+      }, 5000);
+      acknowledgements.current.add(done);
+      done();
+    });
+  };
+
   return {
     mode,
     grid,
@@ -690,7 +741,7 @@ export function useLocalCameraEngine(isFocused: boolean) {
     setFlash: (value: 'auto' | 'off' | 'on') =>
       perform({ type: 'settings', revision: revision.current, key: 'flash', value }),
     takePhoto,
-    perform,
+    perform: performConfirmed,
     captureState,
     enabled,
     ready,
@@ -710,6 +761,13 @@ export function useLocalCameraEngine(isFocused: boolean) {
       advanceRevision();
       setRequested(profile);
       setError('');
+    },
+    focus: async (point: Point) => {
+      if (!readyRef.current || !cameraRef.current) throw new Error('Camera is not ready.');
+      await cameraRef.current.focusTo(point, {
+        adaptiveness: 'continuous',
+        responsiveness: modeRef.current === 'photo' ? 'snappy' : 'steady',
+      });
     },
     bindCamera,
     zoomStops: device
@@ -779,7 +837,6 @@ export function LocalCameraPreview({
       isActive={engine.isActive}
       orientationSource="device"
       resizeMode="contain"
-      enableNativeTapToFocusGesture
       enableNativeZoomGesture
       onConfigured={engine.onConfigured}
       onStarted={engine.onStarted}

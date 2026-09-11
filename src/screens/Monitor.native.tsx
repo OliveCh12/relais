@@ -1,5 +1,5 @@
-import { ExposureControl } from '@/components/ExposureControl';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { ViewfinderGesture } from '@/components/ViewfinderGesture';
+import { videoPoint, type Size } from '@/capture/viewfinder';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useIsFocused } from 'expo-router';
@@ -22,20 +22,15 @@ function report(error: unknown) {
 }
 export default function MonitorScreen() {
   useKeepAwake();
-  const { connection, fill } = useCaptureSession();
+  const { connection, fill, applyingPreset } = useCaptureSession();
   const focused = useIsFocused();
   const { active, start, command: sendCommand, connected, status, diagnostics } = connection;
   const devices = useDevices(connection.server, focused && !active);
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const remote = connection.remote;
-  const [showExposure, setShowExposure] = useState(false);
+  const [videoSize, setVideoSize] = useState<Size>({ width: 0, height: 0 });
   const controls = remote?.settings?.controls;
-  const previewTap = Gesture.Tap()
-    .runOnJS(true)
-    .onEnd((_event, success) => {
-      if (success) setShowExposure(true);
-    });
   const recording = remote?.phase === 'recording';
   const countdown = remote?.phase === 'countdown';
   const visible = !!connection.stream;
@@ -90,11 +85,47 @@ export default function MonitorScreen() {
       <StatusBar style={visible ? 'light' : 'auto'} />
       {visible && connection.stream ? (
         <>
-          <GestureDetector gesture={previewTap}>
-            <View style={StyleSheet.absoluteFill} collapsable={false}>
-              <RemotePreview stream={connection.stream} fill={fill} />
-            </View>
-          </GestureDetector>
+          <ViewfinderGesture
+            key={connection.stream.toURL()}
+            videoSize={videoSize}
+            fill={fill}
+            enabled={
+              !applyingPreset && connected && !!remote?.ready && (remote.canCapture || recording)
+            }
+            {...(controls ? { controls } : {})}
+            onFocus={async (point, size) => {
+              const normalized = videoPoint(point, size, videoSize, fill);
+              const settings = connection.getRemote()?.settings;
+              if (normalized && settings)
+                await sendCommand({
+                  type: 'settings',
+                  key: 'focus',
+                  value: normalized,
+                  revision: settings.revision,
+                });
+            }}
+            onExposure={async (value) => {
+              const settings = connection.getRemote()?.settings;
+              if (settings)
+                await sendCommand({
+                  type: 'settings',
+                  key: 'exposure',
+                  value,
+                  revision: settings.revision,
+                });
+            }}
+            onError={report}
+          >
+            <RemotePreview
+              stream={connection.stream}
+              fill={fill}
+              onDimensionsChange={(size) => {
+                setVideoSize((current) =>
+                  current.width === size.width && current.height === size.height ? current : size,
+                );
+              }}
+            />
+          </ViewfinderGesture>
           <View
             style={[
               styles.top,
@@ -103,7 +134,9 @@ export default function MonitorScreen() {
           >
             <CameraIconButton icon="back" label="Back to cameras" onPress={close} />
             <View style={styles.status}>
-              <Text style={styles.title}>{remote?.quality || 'Connecting…'}</Text>
+              <Text style={styles.title}>
+                {applyingPreset ? 'Applying camera preset…' : remote?.quality || 'Connecting…'}
+              </Text>
               <View style={styles.device}>
                 <Text style={styles.caption} numberOfLines={1} ellipsizeMode="middle">
                   {connection.device?.name ?? 'Camera'}
@@ -114,7 +147,12 @@ export default function MonitorScreen() {
             <CameraIconButton
               icon="settings"
               label="Settings on camera phone"
-              onPress={() => router.push('/monitor/camera-settings')}
+              onPress={() =>
+                router.push({
+                  pathname: '/monitor/device',
+                  params: { id: connection.device?.id ?? '' },
+                })
+              }
             />
           </View>
           <View
@@ -136,27 +174,6 @@ export default function MonitorScreen() {
                 disabled={connection.sending || !connected}
               />
             )}
-            {showExposure &&
-              controls &&
-              remote?.settings &&
-              controls.maxExposure > controls.minExposure &&
-              !countdown && (
-                <ExposureControl
-                  value={controls.exposure}
-                  min={controls.minExposure}
-                  max={controls.maxExposure}
-                  disabled={!connected || connection.sending || !(remote.canCapture || recording)}
-                  onChange={(value) =>
-                    command({
-                      type: 'settings',
-                      key: 'exposure',
-                      value,
-                      revision: remote.settings!.revision,
-                    })
-                  }
-                  onClose={() => setShowExposure(false)}
-                />
-              )}
             <View style={styles.shutter}>
               <CameraIconButton
                 large
@@ -172,6 +189,7 @@ export default function MonitorScreen() {
                         : 'Record a video on camera'
                 }
                 disabled={
+                  applyingPreset ||
                   !connected ||
                   (!countdown && (connection.sending || (!recording && !remote?.canCapture)))
                 }
@@ -192,7 +210,7 @@ export default function MonitorScreen() {
               <CaptureModes
                 mode={remote.mode}
                 modes={remote.modes}
-                disabled={connection.sending || !remote.canCapture || recording}
+                disabled={applyingPreset || connection.sending || !remote.canCapture || recording}
                 onMode={(mode) => command(`mode-${mode}`)}
               />
             )}

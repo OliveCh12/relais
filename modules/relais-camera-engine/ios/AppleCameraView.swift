@@ -126,8 +126,8 @@ private struct AppleCameraScreen: View {
                   HStack(spacing: 3) {
                     Image(systemName: "timer")
                     if model.timerSeconds > 0 { Text("\(model.timerSeconds)s").font(.caption) }
-                  }.frame(minWidth: 44, minHeight: 44)
-                }.disabled(model.busy || model.configuring)
+                  }.font(.system(size: 24)).frame(minWidth: 48, minHeight: 48)
+                }.buttonStyle(.plain).tint(.white).disabled(model.busy || model.configuring)
                   .accessibilityLabel("Photo timer: \(model.timerSeconds == 0 ? "off" : "\(model.timerSeconds) seconds")")
               }
               icon("qrcode", "Connect a monitor") { model.onConnect?() }
@@ -239,16 +239,12 @@ private struct AppleCameraScreen: View {
   private var nearestZoom: Double { model.zoomStops.min { abs($0 - model.zoom) < abs($1 - model.zoom) } ?? 1 }
 
   @ViewBuilder private func icon(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-    if #available(iOS 26.0, *) {
-      Button(label, systemImage: symbol, action: action).labelStyle(.iconOnly)
-        .buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.regular)
-        .frame(width: 44, height: 44).tint(.white)
-    } else {
-      Button(label, systemImage: symbol, action: action).labelStyle(.iconOnly)
-        .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.regular)
-        .frame(width: 44, height: 44).tint(.white)
+    Button(action: action) {
+      Image(systemName: symbol).font(.system(size: 24)).frame(minWidth: 48, minHeight: 48).contentShape(Rectangle())
     }
+    .buttonStyle(.plain).foregroundStyle(.white).accessibilityLabel(label)
   }
+
   private var heights: [Int32] { Array(Set(model.profiles.map(\.height))).sorted(by: >) }
   private var rates: [Int] { Array(Set(model.profiles.filter { $0.height == model.settings.height && $0.hdr == model.settings.hdr }.map(\.fps))).sorted() }
   private var hdrSupported: Bool { model.profiles.contains { $0.height == model.settings.height && $0.fps == model.settings.fps && $0.hdr } }

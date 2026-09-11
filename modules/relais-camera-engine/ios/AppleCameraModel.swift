@@ -424,19 +424,25 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
   }
 
-  func meter(at point: CGPoint) {
-    guard ready, !configuring, !busy || recording else { return }
-    showExposure = true
+  func meter(at point: CGPoint, completion: ((Result<Void, Error>) -> Void)? = nil) {
+    guard ready, !configuring, !busy || recording else {
+      completion?(.failure(CaptureFailure("Camera is not ready.")))
+      return
+    }
     queue.async {
-      guard let device = self.input?.device else { return }
       do {
+        guard let device = self.input?.device else { throw CaptureFailure("Camera is not ready.") }
         try device.lockForConfiguration()
         defer { device.unlockForConfiguration() }
         if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = point }
         if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = point }
         if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
         if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
-      } catch { self.report(error) }
+        DispatchQueue.main.async { completion?(.success(())) }
+      } catch {
+        self.report(error)
+        DispatchQueue.main.async { completion?(.failure(error)) }
+      }
     }
   }
 
@@ -490,6 +496,25 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     guard revision == settingsRevision else { throw CaptureFailure("Camera settings changed. Please try again with the updated options.") }
     remoteApplying = true
     switch key {
+    case "focus":
+      guard let point = command["value"] as? [String: Double], let x = point["x"], let y = point["y"],
+        x.isFinite, y.isFinite, (0...1).contains(x), (0...1).contains(y) else { throw CaptureFailure("Invalid focus point.") }
+      let sensorPoint: CGPoint
+      switch RelaisPreviewSource.shared().rotation {
+      case 90: sensorPoint = CGPoint(x: y, y: 1 - x)
+      case 180: sensorPoint = CGPoint(x: 1 - x, y: 1 - y)
+      case 270: sensorPoint = CGPoint(x: 1 - y, y: x)
+      default: sensorPoint = CGPoint(x: x, y: y)
+      }
+      meter(at: sensorPoint) { [weak self] result in
+        guard let self else { return }
+        self.remoteApplying = false
+        switch result {
+        case .success: self.scheduleRemoteCompletion()
+        case .failure(let error): self.completeRemote(.failure(error))
+        }
+      }
+      return
     case "exposure":
       guard let value = command["value"] as? Double, value.isFinite, value >= minExposure, value <= maxExposure else { throw CaptureFailure("Invalid brightness.") }
       setExposure(value)
@@ -593,7 +618,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
     if action.hasPrefix("{"), phase == "recording", ready, !configuring,
       let data = action.data(using: .utf8), let command = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-      let key = command["key"] as? String, ["zoom", "grid", "exposure"].contains(key) {
+      let key = command["key"] as? String, ["zoom", "grid", "exposure", "focus"].contains(key) {
       try applyRemoteSettings(action); return
     }
     guard ready, !busy, !configuring, phase != "pending" else { throw CaptureFailure("Wait for the camera to be ready.") }

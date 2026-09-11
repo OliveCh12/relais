@@ -1,4 +1,1 @@
-import ConnectionPage from '@/screens/ConnectionPage';
-export default function Page() {
-  return <ConnectionPage page="device" />;
-}
+export { default } from '@/screens/Device';

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import type { IconName } from './icons/types';
 
 export type SettingsRow =
+  | { kind: 'group'; label: string; icon: IconName; rows: SettingsRow[] }
   | { kind: 'value'; label: string; value: string; icon?: IconName }
   | {
       kind: 'action';
