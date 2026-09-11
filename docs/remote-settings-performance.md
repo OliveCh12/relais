@@ -44,6 +44,14 @@ EXPO_PUBLIC_SIGNALING_URL=http://MAC_LAN_IP:8787 xcodebuild -jobs 4 -workspace i
 
 Open Camera on the Pixel and Monitor on the iPhone, connect, then open Camera Settings and change several values. Check that selection feedback and Back navigation remain responsive, that the camera eventually reports the effective values, and that a disconnect removes pending changes. Repeat with the roles reversed. Leave lens/mode transitions time to return their new capability catalogue. Physical network/camera latency and visual acceptance remain owner-run; zero transport latency is not claimed.
 
+## Installed build evidence
+
+Source commit: `c51cc55` on `codex/native-settings-navigation`.
+
+- Android ARM64 Release: build passed (6m 6s), embedded settings UI/queue markers verified, signing certificate matches the existing app. Installed on the Pixel 11 Pro without clearing data; package flags confirm Release, the process is running and Relais is the focused activity. The installed APK SHA-256 matches the local artifact: `9b96d8d0a2986d3e430495f181e85ca19c6f54748f15f7598003775d79175e44`.
+- iOS device Release: build passed, strict code-signature verification passed, and updated settings UI/queue markers verified in `main.jsbundle`. Installed and launched on the paired iPhone 17 Pro through CoreDevice. Bundle SHA-256: `debe07650f0bc4a3a30207515bec5d51d6f08cb60388bacff9a0876cf8244e4f`.
+- All 64 tests passed. Strict TypeScript, zero-warning ESLint, architecture boundaries and formatting passed. Native dependency/toolchain warnings were not suppressed. These are build, deployment and code checks; no physical capture, end-to-end latency benchmark or extended visual QA was performed.
+
 ## Primary references
 
 - [React Native performance](https://reactnative.dev/docs/performance): native stack transitions and Release builds for performance evaluation.
