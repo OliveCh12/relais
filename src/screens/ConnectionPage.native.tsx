@@ -8,7 +8,7 @@ import { SettingsPage } from '@/components/SettingsPage';
 import type { SettingsPageProps } from '@/components/SettingsPage.types';
 import { PairingCodeImage } from '@/components/connection/PairingCodeImage';
 import { QrScanner } from '@/components/QrScanner';
-import { parsePairingQr, privateLanOrigin } from '@/signaling/protocol';
+import { parsePairingQr } from '@/signaling/protocol';
 import { useAppTheme } from '@/design/useAppTheme';
 
 export type ConnectionPageKind = 'add' | 'connect' | 'server' | 'code' | 'scan';
@@ -102,19 +102,13 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
           'In this test version, the Mac prepares the local connection. Its address is usually detected automatically.',
         rows: [
           {
-            kind: 'field',
+            kind: 'name',
+            id: 'connection-server',
             label: 'Mac address',
+            validate: () => undefined,
             value: connection.server,
             maxLength: 300,
-            saveLabel: 'Save',
-            onSave: (value) => {
-              try {
-                connection.setServer(privateLanOrigin(value));
-                router.back();
-              } catch (failure) {
-                showError(failure);
-              }
-            },
+            onSave: connection.setServer,
           },
         ],
       },

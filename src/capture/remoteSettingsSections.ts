@@ -77,6 +77,7 @@ export function remoteSettingsSections(
       onChange: (value) => change({ key: 'grid', value }),
     });
     sections.push({
+      id: 'capture',
       title: 'Capture',
       rows: captureRows,
       footer:
@@ -101,7 +102,8 @@ export function remoteSettingsSections(
         ),
       ].sort((a, b) => a - b);
       sections.push({
-        title: 'Original video',
+        id: 'video',
+        title: 'Video',
         rows: [
           {
             kind: 'choice',

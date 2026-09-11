@@ -12,6 +12,7 @@ export function cameraControlSections(
   const sections: SettingsPageProps['sections'] = [];
   if (controls.maxExposure > controls.minExposure)
     sections.push({
+      id: 'brightness',
       title: 'Brightness',
       footer: 'Exposure stays automatic. This adjustment makes the image lighter or darker.',
       rows: [
@@ -76,6 +77,7 @@ export function cameraControlSections(
         },
       });
     sections.push({
+      id: 'photo',
       title: 'Photo',
       rows,
       footer: 'The timer runs on the camera phone. Tap the shutter again to cancel.',

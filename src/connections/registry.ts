@@ -8,7 +8,7 @@ import {
   type DeviceIdentity,
   type SavedDevice,
 } from './model';
-import { validId } from '../signaling/protocol';
+import { privateLanOrigin, validId } from '../signaling/protocol';
 
 export interface DeviceStorage {
   get(key: string): Promise<string | null>;
@@ -140,6 +140,18 @@ export class DeviceRegistry {
       const previous = this.devices.find((item) => item.id === id);
       if (!previous) return;
       const next = { ...previous, name: name.trim() };
+      await this.storage.set(`relais.device.${id}`, JSON.stringify({ ...next, camera: undefined }));
+      this.publish(this.devices.map((item) => (item.id === id ? next : item)));
+    });
+  }
+  async setServerOverride(id: string, server: string) {
+    const origin = server.trim() ? privateLanOrigin(server) : undefined;
+    await this.load();
+    return this.serialize(async () => {
+      const previous = this.devices.find((item) => item.id === id);
+      if (!previous) throw new Error('This camera is no longer saved.');
+      const { serverOverride: _old, ...rest } = previous;
+      const next = { ...rest, ...(origin ? { serverOverride: origin } : {}) };
       await this.storage.set(`relais.device.${id}`, JSON.stringify({ ...next, camera: undefined }));
       this.publish(this.devices.map((item) => (item.id === id ? next : item)));
     });

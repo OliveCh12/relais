@@ -13,6 +13,7 @@ export interface SavedDevice extends DeviceIdentity {
   secret: string;
   server: string;
   lastConnectedAt: number;
+  serverOverride?: string;
   camera?: CaptureState;
   preset?: CameraPreset;
 }
@@ -44,6 +45,9 @@ export function parseSavedDevice(value: unknown): SavedDevice {
     secret: v.secret,
     server: privateLanOrigin(v.server),
     lastConnectedAt: v.lastConnectedAt,
+    ...(typeof v.serverOverride === 'string' && v.serverOverride
+      ? { serverOverride: privateLanOrigin(v.serverOverride) }
+      : {}),
     ...(parsePreset(v.preset) ? { preset: parsePreset(v.preset)! } : {}),
   };
 }

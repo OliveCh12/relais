@@ -135,7 +135,7 @@ export default function MonitorScreen() {
             <CameraIconButton icon="back" label="Back to cameras" onPress={close} />
             <View style={styles.status}>
               <Text style={styles.title}>
-                {applyingPreset ? 'Applying camera preset…' : remote?.quality || 'Connecting…'}
+                {applyingPreset ? 'Applying camera settings…' : remote?.quality || 'Connecting…'}
               </Text>
               <View style={styles.device}>
                 <Text style={styles.caption} numberOfLines={1} ellipsizeMode="middle">

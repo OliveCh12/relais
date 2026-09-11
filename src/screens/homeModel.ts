@@ -15,10 +15,6 @@ export const roles = [
   },
 ] as const;
 
-export function showAbout() {
-  router.push('/about');
-}
-
 export function useChooseRole() {
   const dispatch = useSessionStore((state) => state.dispatch);
   return (role: Role) => {

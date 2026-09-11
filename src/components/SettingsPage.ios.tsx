@@ -1,8 +1,10 @@
 import { useAppTheme } from '@/design/useAppTheme';
 import { Keyboard } from 'react-native';
-import { useEffect, useRef } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   VStack,
+  ZStack,
   DisclosureGroup,
   Image,
   ProgressView,
@@ -22,6 +24,8 @@ import {
 } from '@expo/ui/swift-ui';
 import {
   buttonStyle,
+  accessibilityLabel,
+  accessibilityAddTraits,
   background,
   shapes,
   controlSize,
@@ -58,15 +62,17 @@ function Field({ row }: { row: Extract<SettingsRow, { kind: 'field' }> }) {
 
 function NameField({ row }: { row: Extract<SettingsRow, { kind: 'name' }> }) {
   const value = useNativeState(row.value);
-  const writer = useNameWriter(row.value, row.onSave);
-  const save = () => writer.save(value.get());
+  const writer = useNameWriter(row.value, row.onSave, row.validate);
+  const save = writer.commit;
+  useFocusEffect(useCallback(() => save, [save]));
   return (
     <VStack alignment="leading" spacing={8}>
       <HStack spacing={12}>
         <TextField
           text={value}
           placeholder={row.label}
-          maxLength={60}
+          onTextChange={writer.edit}
+          maxLength={row.maxLength ?? 60}
           onFocusChange={(focused) => {
             if (!focused) save();
           }}
@@ -80,9 +86,7 @@ function NameField({ row }: { row: Extract<SettingsRow, { kind: 'name' }> }) {
           ]}
         />
         {writer.state.status === 'saving' && <ProgressView />}
-        {writer.state.status === 'saved' && (
-          <NativeIcon name="check" label="Name saved" size={20} />
-        )}
+        {writer.state.status === 'saved' && <NativeIcon name="check" label="Saved" size={20} />}
       </HStack>
       {writer.state.status === 'error' && (
         <Text modifiers={[foregroundStyle('red')]}>{writer.state.message}</Text>
@@ -117,7 +121,45 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
   return (
     <>
       {rows.map((row) =>
-        row.kind === 'group' ? (
+        row.kind === 'navigation' || row.kind === 'option' ? (
+          <Button
+            key={row.label}
+            onPress={row.onPress}
+            modifiers={[
+              buttonStyle('plain'),
+              disabled(row.disabled ?? false),
+              ...(row.kind === 'option' && row.selected
+                ? [accessibilityAddTraits(['isSelected'])]
+                : []),
+            ]}
+          >
+            <HStack spacing={12} modifiers={[frame({ minHeight: 28 })]}>
+              {row.kind === 'navigation' && row.icon && <NativeIcon name={row.icon} size={22} />}
+              <VStack
+                alignment="leading"
+                spacing={4}
+                modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+              >
+                <Text>{row.label}</Text>
+                {row.subtitle && (
+                  <Text
+                    modifiers={[
+                      font({ textStyle: 'subheadline' }),
+                      foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                    ]}
+                  >
+                    {row.subtitle}
+                  </Text>
+                )}
+              </VStack>
+              {row.kind === 'navigation' ? (
+                <Image systemName="chevron.right" size={12} color="#8E8E93" />
+              ) : (
+                row.selected && <Image systemName="checkmark" size={18} />
+              )}
+            </HStack>
+          </Button>
+        ) : row.kind === 'group' ? (
           <DisclosureGroup key={row.label}>
             <DisclosureGroup.Label>
               <HStack spacing={12}>
@@ -202,15 +244,25 @@ export function SettingsPage({ sections, content, header }: SettingsPageProps) {
         {header && (
           <Section>
             <HStack spacing={14}>
-              <Image
-                systemName={sfSymbols[header.icon]}
-                size={24}
-                color={theme.accent}
-                modifiers={[
-                  frame({ width: 48, height: 48 }),
-                  background(theme.elevated, shapes.circle()),
-                ]}
-              />
+              <ZStack alignment="bottomTrailing">
+                <Image
+                  systemName={sfSymbols[header.icon]}
+                  size={24}
+                  color={theme.accent}
+                  modifiers={[
+                    frame({ width: 48, height: 48 }),
+                    background(theme.elevated, shapes.circle()),
+                  ]}
+                />
+                {header.online !== undefined && (
+                  <Image
+                    systemName="circle.fill"
+                    size={12}
+                    color={header.online ? '#34C759' : '#8E8E93'}
+                    modifiers={[accessibilityLabel(header.online ? 'Online' : 'Offline')]}
+                  />
+                )}
+              </ZStack>
               <VStack alignment="leading" spacing={4}>
                 <Text modifiers={[font({ textStyle: 'headline' })]}>{header.title}</Text>
                 <Text

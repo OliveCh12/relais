@@ -7,7 +7,7 @@ import { remoteSettingsSections } from '@/capture/remoteSettingsSections';
 import { previewPreset } from '@/capture/presets';
 import type { CaptureAction } from '@/capture/protocol';
 import { SettingsPage } from '@/components/SettingsPage';
-import type { SettingsPageProps } from '@/components/SettingsPage.types';
+import type { SettingsPageProps, SettingsRow } from '@/components/SettingsPage.types';
 import { DeviceConnect } from '@/components/connection/DeviceConnect';
 import { useDevices } from '@/connections/useDevices';
 import { deviceRegistry } from '@/connections/storage';
@@ -20,7 +20,9 @@ function report(error: unknown) {
 }
 export default function DeviceScreen() {
   const { connection, connectTo, fill, setFill, applyingPreset } = useCaptureSession();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; page?: string; field?: string }>();
+  const page = params.page;
+  const field = params.field;
   const id = params.id || connection.device?.id;
   const focused = useIsFocused();
   const connected = connection.connected && connection.device?.id === id;
@@ -30,9 +32,10 @@ export default function DeviceScreen() {
   const theme = useAppTheme();
   const { setMetricsEnabled } = connection;
   useEffect(() => {
-    setMetricsEnabled(focused && connected);
+    if (!focused) return;
+    setMetricsEnabled(connected && page === 'connection');
     return () => setMetricsEnabled(false);
-  }, [focused, connected, setMetricsEnabled]);
+  }, [focused, connected, page, setMetricsEnabled]);
   const state = connected
     ? connection.remote
     : saved?.camera
@@ -98,88 +101,33 @@ export default function DeviceScreen() {
     : row
       ? availabilityLabels[row.availability]
       : 'Not connected';
-  const sections: SettingsPageProps['sections'] = saved
-    ? [
-        {
-          title: 'This camera',
-          rows: [
-            {
-              kind: 'name',
-              id: saved.id,
-              label: 'Name on this phone',
-              value: saved.name,
-              onSave: (name) => deviceRegistry.rename(saved.id, name),
-            },
-            {
-              kind: 'group',
-              label: 'Connection',
-              icon: quality ? `link${quality.bars}` : 'wifi',
-              rows: [
-                { kind: 'value', label: 'Availability', value: availability, icon: 'device' },
-                {
-                  kind: 'value',
-                  label: 'Signal quality',
-                  value: quality?.label ?? 'Connect to measure',
-                },
-                {
-                  kind: 'value',
-                  label: 'Last connected',
-                  value: new Date(saved.lastConnectedAt).toLocaleString('en-US'),
-                },
-                {
-                  kind: 'value',
-                  label: 'Round-trip delay',
-                  value: sample?.rtt != null ? `${Math.round(sample.rtt)} ms` : 'Not measured',
-                },
-                {
-                  kind: 'value',
-                  label: 'Packet loss',
-                  value:
-                    sample?.loss != null ? `${(sample.loss * 100).toFixed(1)}%` : 'Not measured',
-                },
-                { kind: 'value', label: 'Connection service', value: saved.server },
-              ],
-            },
-          ],
-          footer:
-            'Keep Camera open on this phone, with both phones on the same Wi-Fi network. Link measurements run only on this page.',
-        },
-      ]
-    : [
-        {
-          title: 'Camera unavailable',
-          rows: [],
-          footer: 'Return to My cameras and select a saved device.',
-        },
-      ];
-  if (state) {
-    const disabled = applyingPreset || (connected && (connection.sending || !state.canCapture));
-    const framingDisabled =
-      applyingPreset ||
-      (connected &&
-        (connection.sending || !state.ready || !(state.canCapture || state.phase === 'recording')));
-    sections.push({
-      title: connected ? 'Settings on camera phone' : 'Preset for next connection',
-      rows: remoteSettingsSections(state, command, disabled, framingDisabled)
-        .filter((s) => s.rows.length)
-        .map((section) => ({
-          kind: 'group',
-          label: section.title,
-          icon: section.title === 'Capture' ? 'camera' : 'settings',
-          rows: section.rows,
-        })),
-      footer: connected
-        ? 'Changes apply to the phone capturing the image. Originals are saved in its gallery.'
-        : 'Options are from this camera’s last connection. Saved choices are checked and applied when you connect. A mode or lens change may require connecting to load its formats.',
-    });
-  } else if (saved) {
-    sections.push({
-      title: 'Preset for next connection',
+  const open = (page: string, field?: string) => {
+    if (id)
+      router.push({
+        pathname: '/monitor/device-settings',
+        params: { id, page, ...(field ? { field } : {}) },
+      });
+  };
+  const disabled = applyingPreset || (connected && (connection.sending || !state?.canCapture));
+  const framingDisabled =
+    applyingPreset ||
+    (connected &&
+      (connection.sending || !state?.ready || !(state.canCapture || state.phase === 'recording')));
+  const categories = state
+    ? remoteSettingsSections(state, command, disabled, framingDisabled).filter(
+        (section) => section.id,
+      )
+    : [];
+  if (!categories.some((section) => section.id === 'capture'))
+    categories.unshift({
+      id: 'capture',
+      title: 'Capture',
       rows: [
         {
           kind: 'choice',
           label: 'Capture mode',
-          value: saved.preset?.mode ?? 'photo',
+          value: saved?.preset?.mode ?? 'photo',
+          disabled,
           options: [
             { label: 'Photo', value: 'photo' },
             { label: 'Video', value: 'video' },
@@ -187,80 +135,307 @@ export default function DeviceScreen() {
           onChange: (mode) => command(mode === 'photo' ? 'mode-photo' : 'mode-video'),
         },
       ],
-      footer: 'Connect once with this version to load the camera’s available formats and controls.',
+      footer: 'Connect once to load the camera’s available formats and controls.',
     });
-  }
-  if (connected)
-    sections.push({
-      title: 'On this monitor',
-      rows: [{ kind: 'toggle', label: 'Fill preview screen', value: fill, onChange: setFill }],
-    });
-  if (saved?.preset)
-    sections.push({
-      title: 'Saved preset',
-      rows: [
-        {
-          kind: 'action',
-          label: applyingPreset ? 'Applying preset…' : 'Discard preset',
-          icon: 'settings',
-          disabled: applyingPreset,
-          onPress: () => {
-            void deviceRegistry.savePreset(saved.id, () => undefined).catch(report);
-          },
-        },
-      ],
-      footer: 'The preset stays saved until every change has been confirmed by the camera.',
-    });
-  if (saved)
-    sections.push({
-      title: 'Pairing',
-      rows: [
-        {
-          kind: 'action',
-          label: 'Forget this camera',
-          destructive: true,
-          onPress: () =>
-            Alert.alert('Forget this camera?', 'You can pair it again with its connection code.', [
-              { text: 'Cancel', style: 'cancel' },
+  if (!categories.some((section) => section.id === 'video'))
+    categories.push({
+      id: 'video',
+      title: 'Video',
+      rows:
+        state?.mode === 'photo'
+          ? [
               {
-                text: 'Forget',
-                style: 'destructive',
-                onPress: () => {
-                  if (connected) connection.stop();
-                  void deviceRegistry
-                    .forget(saved.id)
-                    .then(() => router.dismissTo('/monitor'))
-                    .catch(report);
-                },
+                kind: 'action',
+                label: 'Use Video mode',
+                icon: 'record',
+                disabled,
+                onPress: () => command('mode-video'),
               },
-            ]),
-        },
-      ],
+            ]
+          : [],
+      footer:
+        state?.mode === 'photo'
+          ? 'Choose Video mode to edit its recording quality, audio and stabilization.'
+          : 'Connect to load the video formats available with this mode and lens.',
     });
+  const context = connected
+    ? `Changes apply to ${saved?.name ?? 'the camera phone'}. Originals stay in its gallery.`
+    : 'Changes are saved for this camera and applied when you connect. Available formats are checked again on the camera phone.';
+  let title = saved?.name ?? 'Camera';
+  let sections: SettingsPageProps['sections'] = [];
+  if (!saved)
+    sections = [
+      {
+        title: 'Camera unavailable',
+        rows: [],
+        footer: 'Return to My cameras and select a saved device.',
+      },
+    ];
+  else if (page === 'connection') {
+    title = 'Connection';
+    sections = [
+      {
+        title: saved.name,
+        rows: [
+          {
+            kind: 'name',
+            id: saved.id,
+            label: 'Name on this phone',
+            value: saved.name,
+            onSave: (name) => deviceRegistry.rename(saved.id, name),
+          },
+        ],
+        footer: 'This name helps you identify the camera on this phone.',
+      },
+      {
+        title: 'Network',
+        rows: [
+          {
+            kind: 'name',
+            id: `${saved.id}-server`,
+            label: 'Connection service address',
+            value: saved.serverOverride ?? '',
+            maxLength: 300,
+            validate: () => undefined,
+            onSave: (value) => deviceRegistry.setServerOverride(saved.id, value),
+          },
+          { kind: 'value', label: 'Default address', value: connection.server || saved.server },
+        ],
+        footer:
+          'Leave empty to use the app’s connection settings. Changes apply to the next connection. Keep Camera open on the other phone and both phones on the same Wi-Fi network.',
+      },
+      {
+        title: 'Connection details',
+        rows: [
+          { kind: 'value', label: 'Availability', value: availability },
+          { kind: 'value', label: 'Signal quality', value: quality?.label ?? 'Connect to measure' },
+          {
+            kind: 'value',
+            label: 'Last connected',
+            value: new Date(saved.lastConnectedAt).toLocaleString('en-US'),
+          },
+          {
+            kind: 'value',
+            label: 'Round-trip delay',
+            value: sample?.rtt != null ? `${Math.round(sample.rtt)} ms` : 'Not measured',
+          },
+          {
+            kind: 'value',
+            label: 'Packet loss',
+            value: sample?.loss != null ? `${(sample.loss * 100).toFixed(1)}%` : 'Not measured',
+          },
+        ],
+        footer:
+          'Link measurements run only while this page is visible. Pairing stays saved until you forget this camera.',
+      },
+    ];
+  } else if (page === 'preset') {
+    title = 'Preset';
+    sections = [
+      {
+        title: saved.name,
+        footer: context,
+        rows: [
+          {
+            kind: 'value',
+            label: 'Saved changes',
+            value: saved.preset
+              ? `${saved.preset.settings.length + (saved.preset.mode ? 1 : 0)} pending`
+              : 'No pending changes',
+          },
+          ...categories.map((section): SettingsRow => ({
+            kind: 'navigation',
+            label: section.title,
+            icon: section.id === 'capture' ? 'camera' : 'settings',
+            onPress: () => open(section.id!),
+          })),
+          ...(saved.preset
+            ? [
+                {
+                  kind: 'action' as const,
+                  label: 'Discard pending changes',
+                  destructive: true,
+                  disabled: applyingPreset,
+                  onPress: () => {
+                    void deviceRegistry.savePreset(saved.id, () => undefined).catch(report);
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
+    ];
+  } else if (page === 'preview') {
+    title = 'Monitor preview';
+    sections = [
+      {
+        title: 'On this monitor',
+        rows: [{ kind: 'toggle', label: 'Fill preview screen', value: fill, onChange: setFill }],
+        footer:
+          'Only the view on this monitor changes. The original photo or video keeps its camera format.',
+      },
+    ];
+  } else if (page) {
+    const section = categories.find((section) => section.id === page);
+    title = section?.title ?? 'Camera settings';
+    const choice = section?.rows.find((row) => row.kind === 'choice' && row.label === field);
+    if (choice?.kind === 'choice') {
+      title = choice.label;
+      sections = [
+        {
+          title: saved.name,
+          footer: context,
+          rows: choice.options.map((option) => ({
+            kind: 'option',
+            label: option.label,
+            selected: choice.value === option.value,
+            disabled: choice.disabled ?? false,
+            onPress: () => choice.onChange(option.value),
+          })),
+        },
+      ];
+    } else if (section)
+      sections = [
+        {
+          ...section,
+          footer: `${context} ${section.footer ?? ''}`,
+          rows: section.rows.map((row): SettingsRow =>
+            row.kind === 'choice'
+              ? {
+                  kind: 'navigation',
+                  label: row.label,
+                  subtitle:
+                    row.options.find((option) => option.value === row.value)?.label ?? row.value,
+                  icon: 'settings',
+                  disabled: row.disabled ?? false,
+                  onPress: () => open(page, row.label),
+                }
+              : row,
+          ),
+        },
+      ];
+    else
+      sections = [
+        {
+          title: 'Settings unavailable',
+          footer:
+            'Return to the camera page. These controls may have changed with the capture mode.',
+          rows: [],
+        },
+      ];
+  } else {
+    sections = [
+      {
+        title: 'This camera',
+        rows: [
+          {
+            kind: 'navigation',
+            label: 'Connection',
+            subtitle: 'Name, network and pairing',
+            icon: 'wifi',
+            onPress: () => open('connection'),
+          },
+        ],
+      },
+      {
+        title: 'Camera settings',
+        footer: context,
+        rows: [
+          ...categories.map((section): SettingsRow => ({
+            kind: 'navigation',
+            label: section.title,
+            icon:
+              section.id === 'capture'
+                ? 'camera'
+                : section.id === 'video'
+                  ? 'record'
+                  : section.id === 'brightness'
+                    ? 'sun'
+                    : 'settings',
+            onPress: () => open(section.id!),
+          })),
+          {
+            kind: 'navigation',
+            label: 'Preset',
+            subtitle: saved.preset
+              ? 'Changes ready for the next connection'
+              : 'Prepare settings before connecting',
+            icon: 'settings',
+            onPress: () => open('preset'),
+          },
+        ],
+      },
+      {
+        title: 'On this monitor',
+        rows: [
+          { kind: 'navigation', label: 'Preview', icon: 'monitor', onPress: () => open('preview') },
+        ],
+      },
+      {
+        title: 'Pairing',
+        rows: [
+          {
+            kind: 'action',
+            label: 'Forget this camera',
+            destructive: true,
+            onPress: () =>
+              Alert.alert(
+                'Forget this camera?',
+                'You can pair it again with its connection code.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Forget',
+                    style: 'destructive',
+                    onPress: () => {
+                      if (connected) connection.stop();
+                      void deviceRegistry
+                        .forget(saved.id)
+                        .then(() => router.dismissTo('/monitor'))
+                        .catch(report);
+                    },
+                  },
+                ],
+              ),
+          },
+        ],
+      },
+    ];
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <Stack.Screen options={{ title: 'Camera', headerShown: true }} />
-      <DeviceConnect
-        connected={connected}
-        disabled={applyingPreset || (!connected && !row?.descriptor)}
-        onConnect={() => {
-          if (connected) router.dismissTo('/monitor');
-          else if (row?.descriptor) {
-            const descriptor = row.descriptor;
-            void deviceRegistry
-              .getDevice(row.device.id)
-              .then((latest) => {
-                if (latest) connectTo(descriptor, latest);
-              })
-              .catch(report);
-          }
-        }}
-      />
+      <Stack.Screen options={{ title: page ? title : 'Camera', headerShown: true }} />
+      {!page && (
+        <DeviceConnect
+          connected={connected}
+          disabled={applyingPreset || (!connected && !row?.descriptor)}
+          onConnect={() => {
+            if (connected) router.dismissTo('/monitor');
+            else if (row?.descriptor) {
+              const descriptor = row.descriptor;
+              void deviceRegistry
+                .getDevice(row.device.id)
+                .then((latest) => {
+                  if (latest) connectTo(descriptor, latest);
+                })
+                .catch(report);
+            }
+          }}
+        />
+      )}
       <StatusBar style="auto" />
       <SettingsPage
         sections={sections}
-        {...(saved
-          ? { header: { title: saved.name, subtitle: availability, icon: 'device' as const } }
+        {...(saved && !page
+          ? {
+              header: {
+                title: saved.name,
+                subtitle: availability,
+                icon: 'device' as const,
+                online: connected || row?.availability === 'available',
+              },
+            }
           : {})}
       />
     </View>

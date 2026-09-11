@@ -1,9 +1,11 @@
 import chevronRight from '@expo/material-symbols/chevron_right.xml';
 import expandMore from '@expo/material-symbols/keyboard_arrow_down.xml';
 import { Keyboard } from 'react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
+  RadioButton,
   Row,
   Surface,
   Shape,
@@ -27,6 +29,7 @@ import {
 } from '@expo/ui/jetpack-compose';
 import {
   size,
+  weight,
   defaultMinSize,
   clickable,
   fillMaxWidth,
@@ -60,13 +63,15 @@ function Field({ row }: { row: Extract<SettingsRow, { kind: 'field' }> }) {
 
 function NameField({ row }: { row: Extract<SettingsRow, { kind: 'name' }> }) {
   const value = useNativeState(row.value);
-  const writer = useNameWriter(row.value, row.onSave);
-  const save = () => writer.save(value.get());
+  const writer = useNameWriter(row.value, row.onSave, row.validate);
+  const save = writer.commit;
+  useFocusEffect(useCallback(() => save, [save]));
   return (
     <Column modifiers={[paddingAll(16)]}>
       <OutlinedTextField
         value={value}
-        maxLength={60}
+        onValueChange={writer.edit}
+        maxLength={row.maxLength ?? 60}
         singleLine
         modifiers={[fillMaxWidth()]}
         keyboardOptions={{ imeAction: 'done' }}
@@ -88,7 +93,7 @@ function NameField({ row }: { row: Extract<SettingsRow, { kind: 'name' }> }) {
           {writer.state.status === 'saving' ? (
             <CircularProgressIndicator modifiers={[size(20, 20)]} />
           ) : writer.state.status === 'saved' ? (
-            <NativeIcon name="check" label="Name saved" size={20} />
+            <NativeIcon name="check" label="Saved" size={20} />
           ) : (
             <Text>{''}</Text>
           )}
@@ -210,7 +215,7 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
           <ListItem
             key={row.label}
             colors={{ containerColor: 'transparent' }}
-            modifiers={row.kind === 'action' && !row.disabled ? [clickable(row.onPress)] : []}
+            modifiers={'onPress' in row && !row.disabled ? [clickable(row.onPress)] : []}
           >
             {'icon' in row && row.icon && (
               <ListItem.LeadingContent>
@@ -230,6 +235,25 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
                 {row.label}
               </Text>
             </ListItem.HeadlineContent>
+            {(row.kind === 'navigation' || row.kind === 'option') && row.subtitle && (
+              <ListItem.SupportingContent>
+                <Text>{row.subtitle}</Text>
+              </ListItem.SupportingContent>
+            )}
+            {row.kind === 'navigation' && (
+              <ListItem.TrailingContent>
+                <Icon source={chevronRight} size={20} />
+              </ListItem.TrailingContent>
+            )}
+            {row.kind === 'option' && (
+              <ListItem.TrailingContent>
+                <RadioButton
+                  selected={row.selected}
+                  onClick={row.onPress}
+                  enabled={!row.disabled}
+                />
+              </ListItem.TrailingContent>
+            )}
             {row.kind === 'value' && (
               <ListItem.SupportingContent>
                 <Text>{row.value}</Text>
@@ -261,16 +285,27 @@ export function SettingsContent({ sections, content, header }: SettingsPageProps
             horizontalArrangement={{ spacedBy: 14 }}
             verticalAlignment="center"
           >
-            <Surface
-              color={colors.primaryContainer}
-              shape={Shape.Circle({ radius: 1 })}
-              modifiers={[size(48, 48)]}
-            >
-              <Box contentAlignment="center" modifiers={[size(48, 48)]}>
-                <NativeIcon name={header.icon} size={24} color={colors.primary} />
-              </Box>
-            </Surface>
-            <Column verticalArrangement={{ spacedBy: 4 }}>
+            <Box contentAlignment="bottomEnd">
+              <Surface
+                color={colors.primaryContainer}
+                shape={Shape.Circle({ radius: 1 })}
+                modifiers={[size(48, 48)]}
+              >
+                <Box contentAlignment="center" modifiers={[size(48, 48)]}>
+                  <NativeIcon name={header.icon} size={24} color={colors.primary} />
+                </Box>
+              </Surface>
+              {header.online !== undefined && (
+                <Surface
+                  color={header.online ? '#34A853' : colors.outline}
+                  shape={Shape.Circle({ radius: 1 })}
+                  modifiers={[size(12, 12)]}
+                >
+                  <Text>{''}</Text>
+                </Surface>
+              )}
+            </Box>
+            <Column modifiers={[weight(1)]} verticalArrangement={{ spacedBy: 4 }}>
               <Text style={{ typography: 'titleMedium' }}>{header.title}</Text>
               <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
                 {header.subtitle}

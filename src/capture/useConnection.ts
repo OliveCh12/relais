@@ -1,24 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import Constants from 'expo-constants';
+import { appPreferences, detectedServer, usePreferences } from '@/preferences/usePreferences';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import { PeerSession } from '../transport/PeerSession';
 import { openNativePreview, type MediaStream } from '../transport/native/media';
 import { deviceRegistry } from '../connections/storage';
 import type { SavedDevice } from '../connections/model';
 import type { LinkSample } from '../connections/quality';
-import { privateLanOrigin, type PairingDescriptor } from '../signaling/protocol';
+import { type PairingDescriptor } from '../signaling/protocol';
 import { CommandHost } from './CommandHost';
 import { parseCaptureState, parseMessage, type CaptureAction, type CaptureState } from './protocol';
 
-function initialServer() {
-  const host = Constants.expoConfig?.hostUri?.split(':')[0];
-  try {
-    return privateLanOrigin(process.env.EXPO_PUBLIC_SIGNALING_URL || `http://${host}:8787`);
-  } catch {
-    return '';
-  }
-}
 export function useConnection(
   role: 'camera' | 'monitor',
   camera?: {
@@ -28,7 +20,10 @@ export function useConnection(
 ) {
   const focused = useIsFocused();
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
-  const [server, setServer] = useState(initialServer);
+  const preferences = usePreferences();
+  const [fallbackServer, setFallbackServer] = useState(detectedServer);
+  const server = preferences.value.server || fallbackServer;
+  const setServer = useCallback((server: string) => appPreferences.update({ server }), []);
   const [active, setActive] = useState(false);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState('Open Camera on your other phone.');
@@ -110,7 +105,7 @@ export function useConnection(
     void deviceRegistry
       .load()
       .then(() => {
-        setServer((current) => current || deviceRegistry.getSnapshot()[0]?.server || '');
+        setFallbackServer((current) => current || deviceRegistry.getSnapshot()[0]?.server || '');
       })
       .catch(() => {});
     return () => {
@@ -230,6 +225,7 @@ export function useConnection(
   useEffect(() => {
     if (
       role === 'camera' &&
+      preferences.loaded &&
       focused &&
       foreground &&
       camera?.state.ready &&
@@ -246,6 +242,7 @@ export function useConnection(
     foreground,
     camera?.state.ready,
     camera?.state.canShare,
+    preferences.loaded,
     server,
     active,
     retry,

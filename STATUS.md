@@ -2,6 +2,16 @@
 
 **Camera and Monitor now share a product flow for photos, native video recording and remote shutter/start/stop.** Continuous native focus, exposure and color remain automatic, with optional native tap metering and exposure compensation. The local writer is independent of the reduced native WebRTC preview. The Mac rendezvous and physical-device validation remain required.
 
+## Home, app Settings and device stack pages
+
+- Developed in `codex/native-settings-navigation`, an isolated worktree based on cleanup commit `8aa090a`; the primary checkout remains untouched.
+- Home has Camera / Monitor in native grouped rows and a Settings gear. Preferred quality, Connection settings and About live under Settings with system Back navigation.
+- Device categories and individual choices open stack pages. Connect remains at the top right; the device header holds the single availability indicator. Connection contains editable name/network and scoped link measurements. Forget remains destructive at the bottom of the device page.
+- Text auto-saves on blur, Done and leaving the page, with serialized storage writes and native progress/check feedback. Quality, network defaults, per-camera overrides, pending presets and monitor framing are durable; no Save action is added to these flows.
+- Remote video defaults target supported 4K60 with compatible fallback. Explicit device presets take priority, photo mode is unchanged, and automatic quality selection never continuously overrides live manual edits.
+- Validation: strict TypeScript, ESLint with zero project warnings, formatting, 54 tests and architecture boundaries passed; production bundles for all three platforms passed. Android ARM64 build passed and was installed on the paired Pixel without clearing data. Final iOS build/installation evidence follows after signing. Third-party native deprecation/toolchain warnings remain visible and are not suppressed. No physical capture or extended visual QA was performed.
+- [Implementation and native references](docs/native-ui-ux.md#app-settings-and-camera-settings-navigation--september-11-2026).
+
 ## Relay root, viewfinder and unified device page
 
 - GestureHandlerRootView now surrounds the complete navigator. The remote video has a non-collapsible native container, correct Android layer ordering and dimension-aware focus mapping.

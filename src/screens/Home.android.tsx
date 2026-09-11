@@ -1,25 +1,31 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import {
   Column,
   ListItem,
   Host,
   Icon,
   Text,
-  TextButton,
+  Card,
+  IconButton,
+  Surface,
+  Shape,
+  Box,
   useMaterialColors,
 } from '@expo/ui/jetpack-compose';
 import {
   fillMaxSize,
+  size,
   padding,
   clickable,
   testID,
   verticalScroll,
 } from '@expo/ui/jetpack-compose/modifiers';
+import gear from '@expo/material-symbols/settings.xml';
 import chevron from '@expo/material-symbols/chevron_right.xml';
 import { NativeIcon } from '@/components/icons/Icon.android';
 import { useAppTheme } from '@/design/useAppTheme';
-import { roles, showAbout, useChooseRole } from './homeModel';
+import { roles, useChooseRole } from './homeModel';
 
 export default function HomeScreen() {
   const chooseRole = useChooseRole();
@@ -30,7 +36,14 @@ export default function HomeScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Relais',
+          title: '',
+          headerRight: () => (
+            <Host style={{ width: 48, height: 48 }}>
+              <IconButton onClick={() => router.push('/settings')}>
+                <Icon source={gear} size={24} contentDescription="Settings" />
+              </IconButton>
+            </Host>
+          ),
           headerStyle: { backgroundColor: theme.background },
         }}
       />
@@ -40,37 +53,38 @@ export default function HomeScreen() {
           verticalArrangement={{ spacedBy: 24 }}
         >
           <Text style={{ typography: 'titleMedium' }}>Use this phone as</Text>
-          <Column verticalArrangement={{ spacedBy: 12 }}>
-            {roles.map((role) => (
-              <ListItem
-                key={role.id}
-                modifiers={[clickable(() => chooseRole(role.id)), testID(`choose-${role.id}`)]}
-              >
-                <ListItem.LeadingContent>
-                  <NativeIcon name={role.id} size={24} color={colors.primary} />
-                </ListItem.LeadingContent>
-                <ListItem.HeadlineContent>
-                  <Text>{role.title}</Text>
-                </ListItem.HeadlineContent>
-                <ListItem.SupportingContent>
-                  <Text>{role.description}</Text>
-                </ListItem.SupportingContent>
-                <ListItem.TrailingContent>
-                  <Icon source={chevron} size={20} tint={colors.onSurfaceVariant} />
-                </ListItem.TrailingContent>
-              </ListItem>
-            ))}
-          </Column>
-          <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
-            Photos and videos stay on the camera phone.
-          </Text>
-          <TextButton onClick={showAbout}>
-            <NativeIcon name="info" size={16} color={colors.onSurfaceVariant} />
-            <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
-              {' '}
-              About Relais
-            </Text>
-          </TextButton>
+          <Card>
+            <Column>
+              {roles.map((role) => (
+                <ListItem
+                  key={role.id}
+                  colors={{ containerColor: 'transparent' }}
+                  modifiers={[clickable(() => chooseRole(role.id)), testID(`choose-${role.id}`)]}
+                >
+                  <ListItem.LeadingContent>
+                    <Surface
+                      color={colors.primaryContainer}
+                      shape={Shape.Circle({ radius: 1 })}
+                      modifiers={[size(40, 40)]}
+                    >
+                      <Box contentAlignment="center" modifiers={[size(40, 40)]}>
+                        <NativeIcon name={role.id} size={24} color={colors.primary} />
+                      </Box>
+                    </Surface>
+                  </ListItem.LeadingContent>
+                  <ListItem.HeadlineContent>
+                    <Text>{role.title}</Text>
+                  </ListItem.HeadlineContent>
+                  <ListItem.SupportingContent>
+                    <Text>{role.description}</Text>
+                  </ListItem.SupportingContent>
+                  <ListItem.TrailingContent>
+                    <Icon source={chevron} size={20} tint={colors.onSurfaceVariant} />
+                  </ListItem.TrailingContent>
+                </ListItem>
+              ))}
+            </Column>
+          </Card>
         </Column>
       </Host>
     </SafeAreaView>

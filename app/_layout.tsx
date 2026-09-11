@@ -48,7 +48,7 @@ export default function RootLayout() {
           <Stack.Screen name="camera" options={{ headerShown: false }} />
           <Stack.Screen name="monitor" options={{ headerShown: false }} />
           <Stack.Screen name="about" options={{ title: 'About Relais' }} />
-          <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
+          <Stack.Screen name="settings" options={{ title: 'Settings' }} />
           <Stack.Screen name="dev/webrtc" options={{ title: 'Live preview', headerShown: false }} />
         </Stack>
       </ThemeProvider>

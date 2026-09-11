@@ -212,3 +212,26 @@ test('link indicator never invents reception and reflects degraded measured tran
   assert.equal(linkQuality({ rtt: 160, loss: 0, jitter: 0.005 }).bars, 2);
   assert.equal(linkQuality({ rtt: 30, loss: 0.12, jitter: 0.005 }).bars, 1);
 });
+
+test('per-camera network override survives reconnects and resets to the app default', async () => {
+  const memory = memoryRegistry();
+  const device: SavedDevice = {
+    id: 'a'.repeat(32),
+    name: 'Camera',
+    pairId: 'b'.repeat(32),
+    secret: 'c'.repeat(48),
+    server: 'http://192.168.1.2:8787',
+    lastConnectedAt: 10,
+  };
+  await memory.registry.remember(device);
+  await memory.registry.setServerOverride(device.id, 'http://192.168.1.3:8787');
+  await memory.registry.remember({ ...device, lastConnectedAt: 20 });
+  const restarted = memory.restart();
+  await restarted.load();
+  assert.equal(restarted.getSnapshot()[0]?.serverOverride, 'http://192.168.1.3:8787');
+  await assert.rejects(restarted.setServerOverride(device.id, 'https://example.com'));
+  assert.equal(restarted.getSnapshot()[0]?.serverOverride, 'http://192.168.1.3:8787');
+  await restarted.setServerOverride(device.id, '');
+  assert.equal(restarted.getSnapshot()[0]?.serverOverride, undefined);
+  assert.equal(restarted.getSnapshot()[0]?.secret, device.secret);
+});

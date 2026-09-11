@@ -1,3 +1,5 @@
+import { appPreferences, usePreferences } from '@/preferences/usePreferences';
+import { preferredProfile } from '@/preferences/quality';
 import { Alert } from 'react-native';
 import { deviceRegistry } from '@/connections/storage';
 import { supportsSetting, type CameraPreset } from './presets';
@@ -37,8 +39,21 @@ export function SessionProvider({
 }) {
   const [state, setState] = useState(emptyCaptureState);
   const [applyingPreset, setApplyingPreset] = useState(false);
+  const applying = useRef(false);
+  const appliedQuality = useRef(new Set<string>());
+  const preferences = usePreferences();
   const presetRequest = useRef<{ id: string; preset: CameraPreset } | null>(null);
-  const [fill, setFill] = useState(false);
+  const fill = preferences.value.fillPreview;
+  const setFill = useCallback((fillPreview: boolean) => {
+    void appPreferences
+      .update({ fillPreview })
+      .catch((error: unknown) =>
+        Alert.alert(
+          'Preview settings',
+          error instanceof Error ? error.message : 'Could not save this setting.',
+        ),
+      );
+  }, []);
   const pathname = usePathname();
   const pending = useRef<{
     descriptor: PairingDescriptor;
@@ -55,6 +70,7 @@ export function SessionProvider({
   const connection = useConnection(role, role === 'camera' ? { state, perform } : undefined);
   const { start } = connection;
   const connectTo = useCallback((descriptor: PairingDescriptor, expected?: SavedDevice) => {
+    appliedQuality.current.clear();
     presetRequest.current = expected?.preset ? { id: expected.id, preset: expected.preset } : null;
     pending.current = { descriptor, expected };
     router.dismissTo('/monitor');
@@ -71,29 +87,48 @@ export function SessionProvider({
   }, [connection]);
   useEffect(() => {
     const request = presetRequest.current;
+    const id = connection.device?.id;
+    const remote = connection.remote;
     if (
       role !== 'monitor' ||
-      !request ||
+      !preferences.loaded ||
+      applying.current ||
+      connection.sending ||
       !connection.connected ||
-      connection.device?.id !== request.id ||
-      !connection.remote?.canCapture
+      !id ||
+      !remote?.canCapture ||
+      !remote.settings ||
+      (request && request.id !== id)
+    )
+      return;
+    const epoch = connection.getEpoch();
+    const qualityKey = (state: CaptureState) =>
+      `${epoch}:${id}:${state.mode}:${state.settings?.position}:${preferences.value.quality}`;
+    const initialKey = qualityKey(remote);
+    if (
+      !request &&
+      (appliedQuality.current.has(initialKey) ||
+        !preferredProfile(remote, preferences.value.quality))
     )
       return;
     presetRequest.current = null;
+    applying.current = true;
     setApplyingPreset(true);
     const command = connection.command;
-    const epoch = connection.getEpoch();
     const getState = () => {
       const current = currentConnection.current;
-      if (current.getEpoch() !== epoch || !current.connected || current.device?.id !== request.id)
-        throw new Error('Camera disconnected. Your preset is kept for the next connection.');
+      if (current.getEpoch() !== epoch || !current.connected || current.device?.id !== id)
+        throw new Error(
+          'Camera disconnected. Your saved settings are kept for the next connection.',
+        );
       const state = current.getRemote();
       if (!state?.ready || !state.settings) throw new Error('Wait for the camera to be ready.');
       return state;
     };
+    appliedQuality.current.add(initialKey);
     void (async () => {
       let state = getState();
-      if (request.preset.mode && request.preset.mode !== state.mode) {
+      if (request?.preset.mode && request.preset.mode !== state.mode) {
         if (!state.modes.includes(request.preset.mode))
           throw new Error(
             'This capture mode is unavailable on the camera. Your preset has been kept.',
@@ -113,7 +148,7 @@ export function SessionProvider({
         'flash',
         'timerLight',
       ];
-      const settings = [...request.preset.settings].sort(
+      const settings = [...(request?.preset.settings ?? [])].sort(
         (a, b) => order.indexOf(a.key) - order.indexOf(b.key),
       );
       for (const setting of settings) {
@@ -124,18 +159,36 @@ export function SessionProvider({
           );
         await command({ ...setting, type: 'settings', revision: state.settings!.revision });
       }
-      await deviceRegistry.savePreset(request.id, (preset) =>
-        JSON.stringify(preset) === JSON.stringify(request.preset) ? undefined : preset,
-      );
+      state = getState();
+      appliedQuality.current.add(qualityKey(state));
+      // An explicit device preset takes priority over the app's starting quality.
+      if (!request?.preset.settings.some((setting) => setting.key === 'profile')) {
+        const next = preferredProfile(state, preferences.value.quality);
+        if (next && next.id !== state.settings!.profile)
+          await command({
+            type: 'settings',
+            key: 'profile',
+            value: next.id,
+            revision: state.settings!.revision,
+          });
+      }
+      getState();
+      if (request)
+        await deviceRegistry.savePreset(request.id, (preset) =>
+          JSON.stringify(preset) === JSON.stringify(request.preset) ? undefined : preset,
+        );
     })()
       .catch((error: unknown) =>
         Alert.alert(
-          'Camera preset',
-          error instanceof Error ? error.message : 'Could not apply the preset.',
+          'Camera settings',
+          error instanceof Error ? error.message : 'Could not apply camera settings.',
         ),
       )
-      .finally(() => setApplyingPreset(false));
-  }, [role, connection]);
+      .finally(() => {
+        applying.current = false;
+        setApplyingPreset(false);
+      });
+  }, [role, connection, preferences.loaded, preferences.value.quality]);
   useEffect(() => {
     const id = connection.device?.id;
     const state = connection.remote;

@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { Button, Form, Host, HStack, Image, Section, Text, VStack } from '@expo/ui/swift-ui';
 import {
   accessibilityHidden,
@@ -14,7 +14,7 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { NativeIcon } from '@/components/icons/Icon.ios';
 import { useAppTheme } from '@/design/useAppTheme';
-import { roles, showAbout, useChooseRole } from './homeModel';
+import { roles, useChooseRole } from './homeModel';
 
 export default function HomeScreen() {
   const chooseRole = useChooseRole();
@@ -24,11 +24,18 @@ export default function HomeScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Relais',
-          headerLargeTitle: true,
+          title: '',
+          headerLargeTitle: false,
           headerStyle: { backgroundColor: theme.background },
         }}
       />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon="gearshape"
+          accessibilityLabel="Settings"
+          onPress={() => router.push('/settings')}
+        />
+      </Stack.Toolbar>
       <Host style={{ flex: 1 }}>
         <Form>
           <Section title="Use this phone as">
@@ -74,9 +81,6 @@ export default function HomeScreen() {
                 </HStack>
               </Button>
             ))}
-          </Section>
-          <Section footer={<Text>Photos and videos stay on the camera phone.</Text>}>
-            <Button label="About Relais" systemImage="info.circle" onPress={showAbout} />
           </Section>
         </Form>
       </Host>

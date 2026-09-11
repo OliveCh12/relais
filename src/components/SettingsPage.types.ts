@@ -2,6 +2,22 @@ import type { ReactElement } from 'react';
 import type { IconName } from './icons/types';
 
 export type SettingsRow =
+  | {
+      kind: 'navigation';
+      label: string;
+      subtitle?: string;
+      icon?: IconName;
+      onPress: () => void;
+      disabled?: boolean;
+    }
+  | {
+      kind: 'option';
+      label: string;
+      subtitle?: string;
+      selected: boolean;
+      onPress: () => void;
+      disabled?: boolean;
+    }
   | { kind: 'group'; label: string; icon: IconName; rows: SettingsRow[] }
   | { kind: 'value'; label: string; value: string; icon?: IconName }
   | {
@@ -19,6 +35,8 @@ export type SettingsRow =
       label: string;
       value: string;
       onSave: (value: string) => Promise<void>;
+      maxLength?: number;
+      validate?: (value: string) => string | undefined;
     }
   | {
       kind: 'field';
@@ -53,7 +71,7 @@ export type SettingsRow =
       disabled?: boolean;
     };
 export interface SettingsPageProps {
-  sections: { title: string; footer?: string; rows: SettingsRow[] }[];
+  sections: { id?: string; title: string; footer?: string; rows: SettingsRow[] }[];
   content?: ReactElement;
-  header?: { title: string; subtitle: string; icon: IconName };
+  header?: { title: string; subtitle: string; icon: IconName; online?: boolean };
 }

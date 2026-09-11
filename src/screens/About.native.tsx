@@ -12,13 +12,13 @@ export default function About() {
           {
             title: 'Two phones, one camera',
             footer:
-              'Open Camera on one phone and Monitor on the other. Add your camera once, then find it in My cameras.',
+              'Use one phone as the camera and another as its remote control. Open Camera to film, or Monitor to see the live view and control a saved camera.',
             rows: [],
           },
           {
             title: 'Your captures',
             footer:
-              'Take photos and start or stop videos from either phone. Originals are saved in the camera phone’s gallery.',
+              'Take photos, start or stop videos, and adjust the camera from your monitor. Full-quality originals stay in the camera phone’s gallery. The monitor receives a live preview, not a copy of the saved media.',
             rows: [],
           },
           {

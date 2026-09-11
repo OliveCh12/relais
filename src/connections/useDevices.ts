@@ -44,7 +44,11 @@ export function useDevices(server: string, visible: boolean, deviceId?: string) 
       const next = await Promise.all(
         devices.map(async (device): Promise<DeviceRow> => {
           try {
-            const descriptor = await findDevice(device, server || device.server, abort.signal);
+            const descriptor = await findDevice(
+              device,
+              device.serverOverride || server || device.server,
+              abort.signal,
+            );
             return { device, descriptor, availability: descriptor ? 'available' : 'offline' };
           } catch {
             return { device, descriptor: null, availability: 'unreachable' };
