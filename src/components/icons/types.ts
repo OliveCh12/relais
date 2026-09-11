@@ -1,5 +1,10 @@
 export type IconName =
   | 'sun'
+  | 'gear'
+  | 'video'
+  | 'photo'
+  | 'preset'
+  | 'timer'
   | 'check'
   | 'camera'
   | 'monitor'
@@ -34,6 +39,11 @@ export interface IconProps {
 }
 
 export const sfSymbols = {
+  gear: 'gearshape.fill',
+  video: 'video.fill',
+  photo: 'photo.fill',
+  preset: 'rectangle.stack.fill',
+  timer: 'timer',
   sun: 'sun.max.fill',
   check: 'checkmark.circle.fill',
   camera: 'camera.fill',

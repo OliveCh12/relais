@@ -1,3 +1,8 @@
+import gear from '@expo/material-symbols/settings.xml';
+import video from '@expo/material-symbols/videocam.xml';
+import photo from '@expo/material-symbols/photo.xml';
+import preset from '@expo/material-symbols/layers.xml';
+import timer from '@expo/material-symbols/timer.xml';
 import sun from '@expo/material-symbols/wb_sunny.xml';
 import { Host, Icon as ComposeIcon } from '@expo/ui/jetpack-compose';
 import check from '@expo/material-symbols/check_circle.xml';
@@ -28,6 +33,11 @@ import link3 from '@expo/material-symbols/signal_cellular_4_bar.xml';
 import type { IconProps } from './types';
 
 const icons = {
+  gear,
+  video,
+  photo,
+  preset,
+  timer,
   sun,
   check,
   camera,

@@ -7,6 +7,7 @@ import { remoteSettingsSections } from '@/capture/remoteSettingsSections';
 import { previewPreset } from '@/capture/presets';
 import type { CaptureAction } from '@/capture/protocol';
 import { SettingsPage } from '@/components/SettingsPage';
+import type { IconName } from '@/components/icons/types';
 import type { SettingsPageProps, SettingsRow } from '@/components/SettingsPage.types';
 import { DeviceConnect } from '@/components/connection/DeviceConnect';
 import { useDevices } from '@/connections/useDevices';
@@ -14,6 +15,21 @@ import { deviceRegistry } from '@/connections/storage';
 import { availabilityLabels } from '@/connections/model';
 import { linkQuality } from '@/connections/quality';
 import { useAppTheme } from '@/design/useAppTheme';
+
+const categoryIcons: Record<string, IconName> = {
+  capture: 'camera',
+  video: 'video',
+  photo: 'photo',
+  brightness: 'sun',
+};
+const choiceIcons: Record<string, IconName> = {
+  Timer: 'timer',
+  Flash: 'torch',
+  Camera: 'flip',
+  'Capture mode': 'camera',
+  Resolution: 'video',
+  'Frame rate': 'video',
+};
 
 function report(error: unknown) {
   Alert.alert('Camera settings', error instanceof Error ? error.message : 'Please try again.');
@@ -229,6 +245,31 @@ export default function DeviceScreen() {
           'Link measurements run only while this page is visible. Pairing stays saved until you forget this camera.',
       },
     ];
+  } else if (page === 'settings') {
+    title = 'Camera Settings';
+    sections = [
+      {
+        title: saved.name,
+        footer: context,
+        rows: [
+          ...categories.map((section): SettingsRow => ({
+            kind: 'navigation',
+            label: section.title,
+            icon: categoryIcons[section.id ?? ''] ?? 'gear',
+            onPress: () => open(section.id!),
+          })),
+          {
+            kind: 'navigation',
+            label: 'Preset',
+            subtitle: saved.preset
+              ? 'Changes ready for the next connection'
+              : 'Prepare settings before connecting',
+            icon: 'preset',
+            onPress: () => open('preset'),
+          },
+        ],
+      },
+    ];
   } else if (page === 'preset') {
     title = 'Preset';
     sections = [
@@ -246,7 +287,7 @@ export default function DeviceScreen() {
           ...categories.map((section): SettingsRow => ({
             kind: 'navigation',
             label: section.title,
-            icon: section.id === 'capture' ? 'camera' : 'settings',
+            icon: categoryIcons[section.id ?? ''] ?? 'gear',
             onPress: () => open(section.id!),
           })),
           ...(saved.preset
@@ -306,7 +347,7 @@ export default function DeviceScreen() {
                   label: row.label,
                   subtitle:
                     row.options.find((option) => option.value === row.value)?.label ?? row.value,
-                  icon: 'settings',
+                  icon: choiceIcons[row.label] ?? categoryIcons[page] ?? 'gear',
                   disabled: row.disabled ?? false,
                   onPress: () => open(page, row.label),
                 }
@@ -335,33 +376,12 @@ export default function DeviceScreen() {
             icon: 'wifi',
             onPress: () => open('connection'),
           },
-        ],
-      },
-      {
-        title: 'Camera settings',
-        footer: context,
-        rows: [
-          ...categories.map((section): SettingsRow => ({
-            kind: 'navigation',
-            label: section.title,
-            icon:
-              section.id === 'capture'
-                ? 'camera'
-                : section.id === 'video'
-                  ? 'record'
-                  : section.id === 'brightness'
-                    ? 'sun'
-                    : 'settings',
-            onPress: () => open(section.id!),
-          })),
           {
             kind: 'navigation',
-            label: 'Preset',
-            subtitle: saved.preset
-              ? 'Changes ready for the next connection'
-              : 'Prepare settings before connecting',
-            icon: 'settings',
-            onPress: () => open('preset'),
+            label: 'Camera Settings',
+            subtitle: 'Capture options and saved presets',
+            icon: 'gear',
+            onPress: () => open('settings'),
           },
         ],
       },

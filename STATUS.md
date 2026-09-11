@@ -4,6 +4,8 @@
 
 ## Home, app Settings and device stack pages
 
+- Follow-up: the device overview now has one Camera Settings entry. Capture, Video, Photo, Brightness and Preset live on its child pages. Navigation rows consistently use colored SF Symbol badges on iOS and tonal Material Symbol circles on Android, including Home, My cameras, Settings and pairing pages. TypeScript, zero-warning ESLint, architecture boundaries and all-platform production exports passed; incremental iOS and Android builds passed.
+
 - Developed in `codex/native-settings-navigation`, an isolated worktree based on cleanup commit `8aa090a`; the primary checkout remains untouched.
 - Home has Camera / Monitor in native grouped rows and a Settings gear. Preferred quality, Connection settings and About live under Settings with system Back navigation.
 - Device categories and individual choices open stack pages. Connect remains at the top right; the device header holds the single availability indicator. Connection contains editable name/network and scoped link measurements. Forget remains destructive at the bottom of the device page.

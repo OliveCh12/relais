@@ -8,14 +8,10 @@ import {
   Text,
   Card,
   IconButton,
-  Surface,
-  Shape,
-  Box,
   useMaterialColors,
 } from '@expo/ui/jetpack-compose';
 import {
   fillMaxSize,
-  size,
   padding,
   clickable,
   testID,
@@ -23,7 +19,7 @@ import {
 } from '@expo/ui/jetpack-compose/modifiers';
 import gear from '@expo/material-symbols/settings.xml';
 import chevron from '@expo/material-symbols/chevron_right.xml';
-import { NativeIcon } from '@/components/icons/Icon.android';
+import { SettingsIcon } from '@/components/icons/SettingsIcon.android';
 import { useAppTheme } from '@/design/useAppTheme';
 import { roles, useChooseRole } from './homeModel';
 
@@ -62,15 +58,7 @@ export default function HomeScreen() {
                   modifiers={[clickable(() => chooseRole(role.id)), testID(`choose-${role.id}`)]}
                 >
                   <ListItem.LeadingContent>
-                    <Surface
-                      color={colors.primaryContainer}
-                      shape={Shape.Circle({ radius: 1 })}
-                      modifiers={[size(40, 40)]}
-                    >
-                      <Box contentAlignment="center" modifiers={[size(40, 40)]}>
-                        <NativeIcon name={role.id} size={24} color={colors.primary} />
-                      </Box>
-                    </Surface>
+                    <SettingsIcon name={role.id} />
                   </ListItem.LeadingContent>
                   <ListItem.HeadlineContent>
                     <Text>{role.title}</Text>

@@ -3,12 +3,9 @@ import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Box,
   Card,
   Column,
   Icon,
-  Shape,
-  Surface,
   DropdownMenu,
   DropdownMenuItem,
   FloatingActionButton,
@@ -29,6 +26,7 @@ import {
 } from '@expo/ui/jetpack-compose/modifiers';
 import chevron from '@expo/material-symbols/chevron_right.xml';
 import { availabilityLabels } from '@/connections/model';
+import { SettingsIcon } from '../icons/SettingsIcon.android';
 import { NativeIcon } from '../icons/Icon.android';
 import type { MonitorSetupProps } from './MonitorSetup.types';
 
@@ -121,26 +119,7 @@ export function MonitorSetup(props: MonitorSetupProps) {
                     ]}
                   >
                     <ListItem.LeadingContent>
-                      <Surface
-                        shape={Shape.Circle({ radius: 1 })}
-                        color={
-                          row.availability === 'available'
-                            ? colors.primaryContainer
-                            : colors.surfaceContainerHighest
-                        }
-                        modifiers={[size(40, 40)]}
-                      >
-                        <Box contentAlignment="center" modifiers={[size(40, 40)]}>
-                          <NativeIcon
-                            name="device"
-                            color={
-                              row.availability === 'available'
-                                ? colors.onPrimaryContainer
-                                : colors.onSurfaceVariant
-                            }
-                          />
-                        </Box>
-                      </Surface>
+                      <SettingsIcon name="device" muted={row.availability !== 'available'} />
                     </ListItem.LeadingContent>
                     <ListItem.HeadlineContent>
                       <Text>{row.device.name}</Text>

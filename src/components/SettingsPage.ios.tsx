@@ -42,6 +42,7 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { useNameWriter } from './useNameWriter';
 import { sfSymbols } from './icons/types';
+import { SettingsIcon } from './icons/SettingsIcon.ios';
 import { NativeIcon } from './icons/Icon.ios';
 import type { SettingsPageProps, SettingsRow } from './SettingsPage.types';
 
@@ -134,7 +135,7 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
             ]}
           >
             <HStack spacing={12} modifiers={[frame({ minHeight: 28 })]}>
-              {row.kind === 'navigation' && row.icon && <NativeIcon name={row.icon} size={22} />}
+              {row.kind === 'navigation' && <SettingsIcon name={row.icon ?? 'gear'} />}
               <VStack
                 alignment="leading"
                 spacing={4}
@@ -153,7 +154,11 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
                 )}
               </VStack>
               {row.kind === 'navigation' ? (
-                <Image systemName="chevron.right" size={12} color="#8E8E93" />
+                <Image
+                  systemName="chevron.right"
+                  size={12}
+                  modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}
+                />
               ) : (
                 row.selected && <Image systemName="checkmark" size={18} />
               )}

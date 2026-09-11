@@ -12,7 +12,7 @@ import {
   multilineTextAlignment,
   padding,
 } from '@expo/ui/swift-ui/modifiers';
-import { NativeIcon } from '@/components/icons/Icon.ios';
+import { SettingsIcon } from '@/components/icons/SettingsIcon.ios';
 import { useAppTheme } from '@/design/useAppTheme';
 import { roles, useChooseRole } from './homeModel';
 
@@ -46,7 +46,7 @@ export default function HomeScreen() {
                 modifiers={[buttonStyle('plain'), accessibilityIdentifier(`choose-${role.id}`)]}
               >
                 <HStack spacing={16} modifiers={[padding({ vertical: 4 })]}>
-                  <NativeIcon name={role.id} size={24} color={theme.accent} />
+                  <SettingsIcon name={role.id} />
                   <VStack
                     alignment="leading"
                     spacing={4}

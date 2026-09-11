@@ -37,6 +37,7 @@ import {
   verticalScroll,
 } from '@expo/ui/jetpack-compose/modifiers';
 import { useNameWriter } from './useNameWriter';
+import { SettingsIcon } from './icons/SettingsIcon.android';
 import { NativeIcon } from './icons/Icon.android';
 import type { SettingsPageProps, SettingsRow } from './SettingsPage.types';
 
@@ -217,10 +218,17 @@ function SettingsRows({ rows }: { rows: SettingsRow[] }) {
             colors={{ containerColor: 'transparent' }}
             modifiers={'onPress' in row && !row.disabled ? [clickable(row.onPress)] : []}
           >
-            {'icon' in row && row.icon && (
+            {row.kind === 'navigation' ? (
               <ListItem.LeadingContent>
-                <NativeIcon name={row.icon} color={colors.primary} />
+                <SettingsIcon name={row.icon ?? 'gear'} />
               </ListItem.LeadingContent>
+            ) : (
+              'icon' in row &&
+              row.icon && (
+                <ListItem.LeadingContent>
+                  <NativeIcon name={row.icon} color={colors.primary} />
+                </ListItem.LeadingContent>
+              )
             )}
             <ListItem.HeadlineContent>
               <Text

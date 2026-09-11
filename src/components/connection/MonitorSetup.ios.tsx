@@ -13,8 +13,6 @@ import {
 } from '@expo/ui/swift-ui';
 import {
   accessibilityHidden,
-  background,
-  shapes,
   buttonStyle,
   disabled,
   font,
@@ -24,12 +22,11 @@ import {
   padding,
   refreshable,
 } from '@expo/ui/swift-ui/modifiers';
-import { useAppTheme } from '@/design/useAppTheme';
+import { SettingsIcon } from '../icons/SettingsIcon.ios';
 import { availabilityLabels } from '@/connections/model';
 import type { MonitorSetupProps } from './MonitorSetup.types';
 
 export function MonitorSetup(props: MonitorSetupProps) {
-  const theme = useAppTheme();
   return (
     <>
       <Stack.Toolbar placement="right">
@@ -99,15 +96,7 @@ export function MonitorSetup(props: MonitorSetupProps) {
                   spacing={12}
                   modifiers={[frame({ maxWidth: Infinity, minHeight: 56, alignment: 'leading' })]}
                 >
-                  <Image
-                    systemName="smartphone"
-                    size={22}
-                    color={row.availability === 'available' ? theme.accent : theme.muted}
-                    modifiers={[
-                      frame({ width: 40, height: 40 }),
-                      background(theme.elevated, shapes.circle()),
-                    ]}
-                  />
+                  <SettingsIcon name="device" muted={row.availability !== 'available'} />
                   <VStack alignment="leading" spacing={3}>
                     <Text modifiers={[font({ textStyle: 'body' })]}>{row.device.name}</Text>
                     <Text

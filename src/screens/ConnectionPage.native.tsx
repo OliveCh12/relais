@@ -44,13 +44,13 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
         footer: 'Open Camera on your other phone. Keep both apps open on the same Wi-Fi network.',
         rows: [
           {
-            kind: 'action',
+            kind: 'navigation',
             label: 'Scan code',
             icon: 'qr',
             onPress: () => router.push('/monitor/scan'),
           },
           {
-            kind: 'action',
+            kind: 'navigation',
             label: 'Enter code',
             icon: 'code',
             onPress: () => router.push('/monitor/code'),
@@ -66,7 +66,7 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
         footer: error || 'On the other phone, open Camera, then Connect a monitor.',
         rows: [
           {
-            kind: 'action',
+            kind: 'navigation',
             label: 'Enter code instead',
             icon: 'code',
             onPress: () => router.replace('/monitor/code'),
@@ -156,7 +156,7 @@ export default function ConnectionPage({ page }: { page: ConnectionPageKind }) {
           ...(!connection.qr && !connection.connected
             ? [
                 {
-                  kind: 'action' as const,
+                  kind: 'navigation' as const,
                   label: 'Connection settings',
                   icon: 'settings' as const,
                   onPress: () => router.push('/camera/server'),
