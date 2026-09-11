@@ -7,6 +7,7 @@
 - GestureHandlerRootView now surrounds the complete navigator. The remote video has a non-collapsible native container, correct Android layer ordering and dimension-aware focus mapping.
 - Hold/drag adjusts native focus and exposure locally and remotely; UI-thread square/sun/rail feedback does not process camera frames in JavaScript. Plain camera controls use native icons with comfortable targets.
 - Device information and camera settings use native expandable groups on one device page, with Connect/Live in the app bar. Offline presets and the last native capability catalog persist across restart. Every queued change is validated against fresh acknowledgements on connection.
+- Unused CaptureScreen/sheets/camera-settings aliases were removed. Relais-owned Android/iOS compiles have zero project warnings after replacing deprecated Camera2CameraInfo; Expo/RN/Pods deprecations remain and are not suppressed.
 - Code checks currently pass: strict TypeScript, zero ESLint warnings/errors, 49 tests, boundaries and formatting. Final production bundles for iOS, Android and web passed. iPhone and Android ARM64 native builds passed and were installed on the paired iPhone 17 Pro and Pixel 11 Pro, preserving app data; strict iOS signature verification passed. Native dependencies still emit compiler/linker and Gradle deprecation warnings; these are not suppressed.
 - Physical relay, metering accuracy and gallery acceptance remain owner-run. [Bidirectional test guide](docs/relay-testing.md), [implementation and primary sources](docs/research/relay-viewfinder.md).
 
