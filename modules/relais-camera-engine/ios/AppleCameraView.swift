@@ -281,7 +281,7 @@ private struct AppleCameraScreen: View {
             }
             Toggle("HDR video", isOn: Binding(get: { model.settings.hdr }, set: { value in model.change { $0.hdr = value } })).disabled(!hdrSupported)
             Toggle("Stabilization", isOn: Binding(get: { model.settings.stabilization }, set: { value in model.change { $0.stabilization = value } })).disabled(!model.stabilizationSupported)
-            Toggle("Record audio", isOn: Binding(get: { model.settings.audio }, set: model.setAudio))
+            Toggle("Record audio", isOn: Binding(get: { model.settings.audio }, set: { model.setAudio($0) }))
           }.disabled(model.busy || model.configuring)
         }
         Section {

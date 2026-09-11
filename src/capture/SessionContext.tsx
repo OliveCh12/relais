@@ -1,3 +1,4 @@
+import { CommandSupersededError } from './RemoteCommandClient';
 import { appPreferences, usePreferences } from '@/preferences/usePreferences';
 import { preferredProfile } from '@/preferences/quality';
 import { Alert } from 'react-native';
@@ -148,12 +149,13 @@ export function SessionProvider({
           JSON.stringify(preset) === JSON.stringify(request.preset) ? undefined : preset,
         );
     })()
-      .catch((error: unknown) =>
+      .catch((error: unknown) => {
+        if (error instanceof CommandSupersededError) return;
         Alert.alert(
           'Camera settings',
           error instanceof Error ? error.message : 'Could not apply camera settings.',
-        ),
-      )
+        );
+      })
       .finally(() => {
         applying.current = false;
         setApplyingPreset(false);

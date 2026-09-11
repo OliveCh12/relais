@@ -1,3 +1,4 @@
+import { CommandSupersededError } from '@/capture/RemoteCommandClient';
 import { ViewfinderGesture } from '@/components/ViewfinderGesture';
 import { videoPoint, type Size } from '@/capture/viewfinder';
 import { useCallback, useEffect, useState } from 'react';
@@ -18,6 +19,7 @@ import { RemotePreview } from '@/transport/native/RemotePreview';
 import { useAppTheme } from '@/design/useAppTheme';
 
 function report(error: unknown) {
+  if (error instanceof CommandSupersededError) return;
   Alert.alert('Camera', error instanceof Error ? error.message : 'Please try again.');
 }
 export default function MonitorScreen() {
@@ -31,7 +33,7 @@ export default function MonitorScreen() {
   const remote = connection.remote;
   const [videoSize, setVideoSize] = useState<Size>({ width: 0, height: 0 });
   const controls = remote?.settings?.controls;
-  const recording = remote?.phase === 'recording';
+  const recording = remote?.phase === 'recording' || remote?.phase === 'starting';
   const countdown = remote?.phase === 'countdown';
   const visible = !!connection.stream;
   const command = useCallback(
@@ -90,7 +92,11 @@ export default function MonitorScreen() {
             videoSize={videoSize}
             fill={fill}
             enabled={
-              !applyingPreset && connected && !!remote?.ready && (remote.canCapture || recording)
+              !applyingPreset &&
+              !connection.priorityPending &&
+              connected &&
+              !!remote?.ready &&
+              (remote.canCapture || recording)
             }
             {...(controls ? { controls } : {})}
             onFocus={async (point, size) => {
@@ -189,9 +195,11 @@ export default function MonitorScreen() {
                         : 'Record a video on camera'
                 }
                 disabled={
-                  applyingPreset ||
                   !connected ||
-                  (!countdown && (connection.sending || (!recording && !remote?.canCapture)))
+                  connection.priorityPending ||
+                  (!recording &&
+                    !countdown &&
+                    (applyingPreset || connection.sending || !remote?.canCapture))
                 }
                 onPress={() =>
                   command(

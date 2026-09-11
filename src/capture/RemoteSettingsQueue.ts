@@ -52,10 +52,6 @@ export class RemoteSettingsQueue {
       throw new Error('Connect to your camera first.');
     },
   ) {}
-  configure(getState: typeof this.getState, send: typeof this.send) {
-    this.getState = getState;
-    this.send = send;
-  }
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);

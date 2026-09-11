@@ -1,3 +1,4 @@
+import { CommandSupersededError } from '@/capture/RemoteCommandClient';
 import { useEffect } from 'react';
 import { Alert, View } from 'react-native';
 import { Stack, router, useIsFocused, useLocalSearchParams } from 'expo-router';
@@ -33,6 +34,7 @@ const choiceIcons: Record<string, IconName> = {
 
 const reportedErrors = new WeakSet<Error>();
 function report(error: unknown) {
+  if (error instanceof CommandSupersededError) return;
   if (error instanceof Error) {
     if (reportedErrors.has(error)) return;
     reportedErrors.add(error);

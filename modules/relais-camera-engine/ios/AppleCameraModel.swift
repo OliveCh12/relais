@@ -53,6 +53,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   private var settingsRevision = 0
   private var remoteApplying = false
   private var remoteAction: String?
+  private var remoteID: UUID?
   private var remoteCompletion: ((Result<[String: Any], Error>) -> Void)?
   private var remoteDeadline: DispatchWorkItem?
   private(set) var lastSavedAssetIdentifier: String?
@@ -161,17 +162,18 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     configure(next)
   }
 
-  func setAudio(_ enabled: Bool) {
+  func setAudio(_ enabled: Bool, operation: UUID? = nil) {
     guard visible, !busy, !configuring, !requestingPermission else { return }
     requestingPermission = true
     let request = generation
     Task { @MainActor in
-      defer { requestingPermission = false; remoteApplying = false; scheduleRemoteCompletion(); if !ready { resume() } }
+      defer { requestingPermission = false; finishAdjustment(operation, .success(())); if !ready { resume() } }
       let granted = enabled ? await AVCaptureDevice.requestAccess(for: .audio) : true
-      guard visible, !closing, generation == request else { return }
+      guard visible, !closing, generation == request,
+        operation == nil || remoteID == operation else { return }
       if !granted {
         message = "Allow microphone access in Settings on the camera phone to record audio."
-        completeRemote(.failure(CaptureFailure(message)))
+        finishAdjustment(operation, .failure(CaptureFailure(message)))
         return
       }
       change { $0.audio = enabled }
@@ -385,7 +387,8 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
   }
 
-  func setZoom(_ displayValue: Double) {
+  func setZoom(_ displayValue: Double, operation: UUID? = nil) {
+    let request = generation
     queue.async {
       guard let device = self.input?.device else { return }
       do {
@@ -395,22 +398,21 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
         device.videoZoomFactor = value
         device.unlockForConfiguration()
         DispatchQueue.main.async {
+          guard self.generation == request else { return }
           self.zoom = value * multiplier
           self.settingsRevision += 1
-          self.remoteApplying = false
-          self.scheduleRemoteCompletion()
+          self.finishAdjustment(operation, .success(()))
         }
       } catch {
         self.report(error)
-        DispatchQueue.main.async { self.remoteApplying = false; self.completeRemote(.failure(error)) }
+        DispatchQueue.main.async { self.finishAdjustment(operation, .failure(error)) }
       }
     }
   }
 
-  func setExposure(_ value: Double) {
+  func setExposure(_ value: Double, operation: UUID? = nil) {
     guard ready, !configuring, (!busy || recording), value.isFinite, value >= minExposure, value <= maxExposure else {
-      remoteApplying = false
-      completeRemote(.failure(CaptureFailure("This brightness is unavailable on the camera phone.")))
+      finishAdjustment(operation, .failure(CaptureFailure("This brightness is unavailable on the camera phone.")))
       return
     }
     let request = generation
@@ -423,14 +425,13 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
             guard self.generation == request else { return }
             self.exposure = Double(device.exposureTargetBias)
             self.settingsRevision += 1
-            self.remoteApplying = false
-            self.scheduleRemoteCompletion()
+            self.finishAdjustment(operation, .success(()))
           }
         }
         device.unlockForConfiguration()
       } catch {
         self.report(error)
-        DispatchQueue.main.async { self.remoteApplying = false; self.completeRemote(.failure(error)) }
+        DispatchQueue.main.async { self.finishAdjustment(operation, .failure(error)) }
       }
     }
   }
@@ -506,6 +507,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       let key = command["key"] as? String else { throw CaptureFailure("Invalid camera setting.") }
     guard revision == settingsRevision else { throw CaptureFailure("Camera settings changed. Please try again with the updated options.") }
     remoteApplying = true
+    let operation = remoteID
     switch key {
     case "focus":
       guard let point = command["value"] as? [String: Double], let x = point["x"], let y = point["y"],
@@ -519,16 +521,12 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       }
       meter(at: sensorPoint) { [weak self] result in
         guard let self else { return }
-        self.remoteApplying = false
-        switch result {
-        case .success: self.scheduleRemoteCompletion()
-        case .failure(let error): self.completeRemote(.failure(error))
-        }
+        self.finishAdjustment(operation, result)
       }
       return
     case "exposure":
       guard let value = command["value"] as? Double, value.isFinite, value >= minExposure, value <= maxExposure else { throw CaptureFailure("Invalid brightness.") }
-      setExposure(value)
+      setExposure(value, operation: operation)
       return
     case "timer":
       guard settings.photo, let value = command["value"] as? Int, [0, 3, 10].contains(value) else { throw CaptureFailure("Invalid photo timer.") }
@@ -546,7 +544,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       change { $0.front = position == "front" }
     case "audio":
       guard let value = command["value"] as? Bool, !settings.photo else { throw CaptureFailure("Switch to Video to change audio.") }
-      setAudio(value)
+      setAudio(value, operation: operation)
       return
     case "grid":
       guard let value = command["value"] as? Bool else { throw CaptureFailure("Invalid grid setting.") }
@@ -556,7 +554,7 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       change { $0.stabilization = value }
     case "zoom":
       guard let value = command["value"] as? Double, value.isFinite, value >= minZoom, value <= maxZoom else { throw CaptureFailure("This zoom is unavailable on the camera phone.") }
-      setZoom(value)
+      setZoom(value, operation: operation)
       return
     default: throw CaptureFailure("Unknown camera setting.")
     }
@@ -580,11 +578,18 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
       completion(.success(captureState))
       return
     }
+    if action == "stop", canUseCamera, phase == "recording" || phase == "starting",
+      let previous = remoteAction, previous == "start" || previous.hasPrefix("{") {
+      completeRemote(.failure(CaptureFailure("Pending camera adjustment was cancelled by Stop.")))
+    }
     guard remoteCompletion == nil else { completion(.failure(CaptureFailure("Wait for the camera to finish."))); return }
+    let operation = UUID()
+    remoteID = operation
     remoteAction = action
     remoteCompletion = completion
     let deadline = DispatchWorkItem { [weak self] in
-      self?.completeRemote(.failure(CaptureFailure("The camera has not confirmed completion. Check the camera phone before retrying.")))
+      guard let self, self.remoteID == operation else { return }
+      self.completeRemote(.failure(CaptureFailure("The camera has not confirmed completion. Check the camera phone before retrying.")))
     }
     remoteDeadline = deadline
     DispatchQueue.main.asyncAfter(deadline: .now() + 90, execute: deadline)
@@ -592,9 +597,19 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     catch { completeRemote(.failure(error)) }
   }
 
+  private func finishAdjustment(_ operation: UUID?, _ result: Result<Void, Error>) {
+    guard let operation, remoteID == operation else { return }
+    remoteApplying = false
+    switch result {
+    case .success: scheduleRemoteCompletion()
+    case .failure(let error): completeRemote(.failure(error))
+    }
+  }
+
   private func completeRemote(_ result: Result<[String: Any], Error>) {
     let completion = remoteCompletion
     remoteCompletion = nil
+    remoteID = nil
     remoteApplying = false
     remoteAction = nil
     remoteDeadline?.cancel()
@@ -603,8 +618,9 @@ final class AppleCameraModel: NSObject, ObservableObject, AVCaptureFileOutputRec
   }
 
   private func scheduleRemoteCompletion() {
+    guard let operation = remoteID else { return }
     DispatchQueue.main.async { [weak self] in
-      guard let self, let action = self.remoteAction else { return }
+      guard let self, self.remoteID == operation, let action = self.remoteAction else { return }
       if self.phase == "pending" || self.phase == "error" {
         self.completeRemote(.failure(CaptureFailure(self.message.isEmpty ? "Capture failed. Check the camera phone." : self.message)))
       } else if action == "start", self.phase == "recording" {
