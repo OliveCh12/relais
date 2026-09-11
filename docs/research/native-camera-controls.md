@@ -6,7 +6,7 @@ Implementation reviewed September 10, 2026, against the installed Expo UI 57.0.1
 
 The device page uses a SwiftUI Form/Section on iOS and Material Card/ListItem groups on Android. A platform device icon, title and short explanation identify the selected camera. Connect is a full-width SwiftUI bordered-prominent Button or Material filled Button, with native disabled state and Android ripple.
 
-The native name field saves on focus loss or keyboard Done. Duplicate events coalesce, writes serialize, and a native progress indicator/check reflects durable storage completion. Invalid or failed names stay editable and retryable. The field keeps its identity across saved-name updates. Device details, pairing and Info remain stack pages. Signal metrics still run only on Info.
+The native name field saves on focus loss or keyboard Done. Duplicate events coalesce, writes serialize, and a native progress indicator/check reflects durable storage completion. Invalid or failed names stay editable and retryable. The field keeps its identity across saved-name updates. Device details, pairing and connection measurements share the camera Settings stack page. Signal metrics run only while that page is focused.
 
 ## Camera presentation
 
@@ -17,7 +17,7 @@ The native name field saves on focus loss or keyboard Done. Duplicate events coa
 
 ## Exposure and photo timer
 
-Tap the local viewfinder to meter the scene and reveal a platform Slider. On the monitor, a tap reveals the remote exposure slider; it does not relocate the remote focus point. Exposure is also available in camera settings. Sliders commit when released; no image buffers cross JavaScript. Continuous autofocus, auto exposure and auto white balance remain the baseline.
+Tap the local viewfinder to meter the scene and drag exposure. On the monitor, a tap sends the same focus point to the camera and can drag exposure; the mapping is unvalidated on hardware. Exposure is also available in camera settings. Continuous autofocus, auto exposure and auto white balance remain the baseline.
 
 iOS calls AVFoundation `setExposureTargetBias` on the camera queue and publishes the applied value. The installed VisionCamera Android implementation reads/writes CameraX **compensation indices**, despite naming them exposure bias. Relais reads `CONTROL_AE_COMPENSATION_STEP` from Camera2 metadata without opening a camera, converts indices to EV for the shared protocol, and rounds EV back to a supported index when applying. The displayed value comes from the applied native index. Unsupported exposure ranges stay hidden.
 

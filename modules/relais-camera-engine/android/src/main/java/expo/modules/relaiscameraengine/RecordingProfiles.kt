@@ -2,7 +2,7 @@ package expo.modules.relaiscameraengine
 
 import android.content.Context
 import android.util.Range
-import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.cameraId
 import androidx.camera.core.DynamicRange
 import androidx.camera.core.Preview
 import androidx.camera.core.SessionConfig
@@ -16,9 +16,7 @@ import java.util.concurrent.TimeUnit
 object RecordingProfiles {
   fun query(context: Context, deviceId: String, stabilize: Boolean): List<Map<String, Any>> {
     val provider = ProcessCameraProvider.getInstance(context).get(10, TimeUnit.SECONDS)
-    val info = provider.availableCameraInfos.firstOrNull {
-      Camera2CameraInfo.from(it).cameraId == deviceId
-    } ?: return emptyList()
+    val info = provider.availableCameraInfos.firstOrNull { it.cameraId == deviceId } ?: return emptyList()
     val capabilities = Recorder.getVideoCapabilities(info)
     val results = mutableListOf<Map<String, Any>>()
     for (dynamicRange in listOf(DynamicRange.SDR, DynamicRange.HLG_10_BIT)) {

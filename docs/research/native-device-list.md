@@ -1,6 +1,6 @@
 # Native device list and camera controls
 
-Reviewed September 10, 2026. Scope: make saved cameras the main Monitor entry point, separate pairing, and simplify the connected preview. Remote camera settings remain deferred.
+Reviewed September 10, 2026. Scope: make saved cameras the main Monitor entry point, separate pairing, and simplify the connected preview. Remote camera settings later moved onto the device Settings page (`/monitor/device`); this document records the list/preview pass.
 
 ## Decisions
 

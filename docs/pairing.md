@@ -29,11 +29,11 @@ The Mac server is an explicit prototype limitation. Standalone two-phone operati
 
 ## Acceptance scenarios
 
-| Scenario                               | Procedure                                                                                               | Target / current limitation                                                                                                                                |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iPhone Camera → Pixel Monitor          | Wi-Fi router, QR, 20-minute preview, ping/rec-mock; repeat with hotspot                                 | Pairing < 15 s, first rendered frame < 2 s, video p95 < 300 ms; measurement pending                                                                        |
-| Pixel Camera → iPhone Monitor          | Reverse direction; deny then grant permissions                                                          | Same budgets; no blocked navigation; measurement pending                                                                                                   |
-| Five-second Wi-Fi loss while recording | After native streaming integration: start a real file, disable Wi-Fi, restore, resynchronize, then stop | Intact file, preview returns, no Stop caused by network loss. Unit invariant exists; simultaneous hardware scenario remains blocked by missing integration |
+| Scenario                               | Procedure                                                               | Target / current limitation                                                                                                           |
+| -------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| iPhone Camera → Pixel Monitor          | Wi-Fi router, QR, 20-minute preview, ping/rec-mock; repeat with hotspot | Pairing < 15 s, first rendered frame < 2 s, video p95 < 300 ms; measurement pending                                                   |
+| Pixel Camera → iPhone Monitor          | Reverse direction; deny then grant permissions                          | Same budgets; no blocked navigation; measurement pending                                                                              |
+| Five-second Wi-Fi loss while recording | Start a real file, disable Wi-Fi for five seconds, restore, then stop   | Intact file, preview returns, no Stop caused by network loss. Unit invariant exists; simultaneous hardware scenario is still unproven |
 
 ## Device lab checklist
 

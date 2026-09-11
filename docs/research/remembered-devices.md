@@ -34,4 +34,4 @@ Thresholds are UX guides, not quality certification: good up to 120 ms, 1.5% los
 
 Focused tests cover restart persistence, rename, forget, storage failure, agreement on both devices, reconnection, role reversal, rejection of a forgotten key, expired/occupied/renewed announcements and unmeasured quality. Tests use isolated stores and a temporary local server; they do not certify Keychain or physical-phone behavior.
 
-Local recording and remote preview remain separate. Apps must stay open and both phones plus the Mac must share a LAN. Waiting shares expire with their ten-minute session. Reconnection never silently activates the camera. Two-phone hardware checks and Wi-Fi changes are still pending.
+Local recording and remote preview keep independent lifecycles. Apps must stay open and both phones plus the Mac must share a LAN. Waiting shares expire with their ten-minute session. Reconnection never silently activates the camera. Two-phone hardware checks and Wi-Fi changes are still pending.

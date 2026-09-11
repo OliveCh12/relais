@@ -6,10 +6,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
-  type TextInputProps,
   type TextProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -72,22 +70,6 @@ export function Badge({ children }: PropsWithChildren) {
   return (
     <View style={styles.badge}>
       <AppText variant="label">{children}</AppText>
-    </View>
-  );
-}
-
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
-  return (
-    <View style={styles.gap}>
-      <AppText variant="label">{label}</AppText>
-      <TextInput
-        {...props}
-        accessibilityLabel={label}
-        autoCorrect={false}
-        autoCapitalize="none"
-        placeholderTextColor={theme.colors.muted}
-        style={styles.input}
-      />
     </View>
   );
 }
@@ -230,15 +212,6 @@ const styles = StyleSheet.create({
   secondary: { backgroundColor: theme.colors.elevated },
   dim: { opacity: 0.5 },
   gap: { gap: 8 },
-  input: {
-    backgroundColor: theme.colors.surface,
-    color: theme.colors.text,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 14,
-    borderRadius: 12,
-    fontSize: 16,
-  },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     padding: 12,

@@ -54,8 +54,6 @@ export type SettingsRow =
     };
 export interface SettingsPageProps {
   sections: { title: string; footer?: string; rows: SettingsRow[] }[];
-  presentation?: 'page' | 'sheet';
-  onDismiss?: () => void;
   content?: ReactElement;
   header?: { title: string; subtitle: string; icon: IconName };
 }

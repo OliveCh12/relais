@@ -33,8 +33,3 @@ export function useQualityModel(capabilities: CameraCapabilities) {
 }
 
 export type QualityModel = ReturnType<typeof useQualityModel>;
-export interface QualitySheetProps {
-  visible: boolean;
-  onClose: () => void;
-  model: QualityModel;
-}

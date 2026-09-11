@@ -3,7 +3,6 @@ import expandMore from '@expo/material-symbols/keyboard_arrow_down.xml';
 import { Keyboard } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ModalBottomSheet,
   Box,
   Row,
   Surface,
@@ -305,14 +304,6 @@ export function SettingsContent({ sections, content, header }: SettingsPageProps
 }
 
 export function SettingsPage(props: SettingsPageProps) {
-  if (props.presentation === 'sheet')
-    return (
-      <Host colorScheme="dark" style={{ flex: 1 }}>
-        <ModalBottomSheet skipPartiallyExpanded onDismissRequest={props.onDismiss ?? (() => {})}>
-          <SettingsContent {...props} />
-        </ModalBottomSheet>
-      </Host>
-    );
   return (
     <Host style={{ flex: 1 }}>
       <SettingsContent {...props} />

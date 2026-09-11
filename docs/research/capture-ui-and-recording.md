@@ -1,6 +1,8 @@
 # Native camera and local recording — September 9, 2026
 
-This document preserves the first local-recording implementation. On September 10, iOS migrated from VisionCamera to direct AVFoundation for Apple's Cinematic APIs and hardware-derived profiles. See [the current camera decision](native-camera-capabilities.md) and [STATUS.md](../../STATUS.md).
+Historical snapshot of the first local-recording implementation. Current product truth: [native-remote-capture.md](native-remote-capture.md), [remote-media-reliability.md](remote-media-reliability.md), [STATUS.md](../../STATUS.md). Do not treat the unfinished-tee sentences below as current.
+
+On September 10, iOS migrated from VisionCamera to direct AVFoundation for Apple's Cinematic APIs and hardware-derived profiles. See [the current camera decision](native-camera-capabilities.md).
 
 ## Interface choices
 
@@ -22,7 +24,7 @@ Delete the private file only after gallery confirmation. On failure, retain it; 
 
 ## Explicit limits
 
-Local recording and remote preview remain separate journeys. The isolated network prototype owns its own test capture and writes no file; it closes before local capture starts. Connecting a reduced native output to WebRTC remains unfinished. No second camera session bypasses this limitation.
+At the time of this snapshot, local recording and the isolated network prototype were separate journeys. The product later connected a reduced native output to WebRTC without a second camera session. Recording and transport keep independent lifecycles. See [remote-media-reliability.md](remote-media-reliability.md).
 
 The historical remote-capability contract is a labeled stub and does not feed the local camera. Physical recording, Photos playback, rotation, audio and interruption tests remain pending. Selected file fps does not measure UI smoothness.
 

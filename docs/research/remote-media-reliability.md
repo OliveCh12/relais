@@ -28,7 +28,7 @@ Source: [PhotoKit asset creation](https://developer.apple.com/documentation/phot
 
 ## Native remote settings
 
-**Monitor → Camera settings** is a stack page using SwiftUI Form/Picker/Toggle/Slider on iOS and Material ListItem/DropdownMenu/Switch/Slider on Android. The paired capturing phone's name and local-gallery destination are explicit. Connection measurements remain confined to Info.
+**Monitor → Camera settings** is the device Settings stack page using SwiftUI Form/Picker/Toggle/Slider on iOS and Material ListItem/DropdownMenu/Switch/Slider on Android. The paired capturing phone's name and local-gallery destination are explicit. Connection measurements run only while that page is focused.
 
 The Camera publishes its actual profile catalog, active profile, supported modes, camera position, zoom range, microphone, grid and stabilization settings. The remote selects only entries in this catalog; it does not construct hypothetical resolution/FPS/HDR combinations. A settings revision rejects requests based on an obsolete camera configuration. Payload types, ranges, profile IDs, catalog size and message size are bounded. Older peers without settings remain usable for existing capture commands, but do not expose invented settings.
 
